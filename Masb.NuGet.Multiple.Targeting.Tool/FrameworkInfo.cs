@@ -18,11 +18,13 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         public FrameworkInfo(
             FrameworkName frameworkName,
             IEnumerable<AssemblyInfo> assemblyInfos,
-            IEnumerable<IUndeterminedSet<FrameworkName>> supportedFrameworks)
+            IEnumerable<IUndeterminedSet<FrameworkName>> supportedFrameworks,
+            IEnumerable<string> missngDlls)
         {
             this.SupportedFrameworks = new IntersectionSet<FrameworkName>(supportedFrameworks);
             this.FrameworkName = frameworkName;
             this.AssemblyInfos = assemblyInfos.ToImmutableArray();
+            this.MissingAssemblies = missngDlls.ToImmutableArray();
         }
 
         /// <summary>
@@ -42,30 +44,21 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         public ImmutableArray<AssemblyInfo> AssemblyInfos { get; private set; }
 
         /// <summary>
+        /// Gets a collection of assembly names that are missing from framework directory.
+        /// </summary>
+        public ImmutableArray<string> MissingAssemblies { get; private set; }
+
+        /// <summary>
         /// Creates a FrameworkInfo given a FrameworkName asynchronously.
         /// </summary>
         /// <param name="frameworkName">The framework to get information to.</param>
         /// <returns>A Task that returns a FrameworkInfo object when all information is ready.</returns>
         public static async Task<FrameworkInfo> CreateAsync(FrameworkName frameworkName)
         {
-            return await CreateAsync(frameworkName, true);
-        }
-
-        /// <summary>
-        /// Creates a FrameworkInfo given a FrameworkName asynchronously.
-        /// </summary>
-        /// <param name="frameworkName">The framework to get information to.</param>
-        /// <param name="ignoreMissing">Whether to ignore or not frameworks with missing assemblies.</param>
-        /// <returns>A Task that returns a FrameworkInfo object when all information is ready.</returns>
-        public static async Task<FrameworkInfo> CreateAsync(FrameworkName frameworkName, bool ignoreMissing)
-        {
             var directory = GetPolyDirectoryInfoFor(frameworkName);
-            var dlls = GetFrameworkLibraries(directory, frameworkName, ignoreMissing);
+            var dlls = GetFrameworkLibraries(directory, frameworkName);
 
-            if (dlls == null)
-                return null;
-
-            var assemblyInfos = dlls
+            var assemblyInfos = dlls.Item1
                 .Select(AssemblyInfo.GetAssemblyInfo)
                 .ToArray();
 
@@ -84,7 +77,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 }
             }
 
-            return new FrameworkInfo(frameworkName, assemblyInfos, supportedFrameworkInfos);
+            return new FrameworkInfo(frameworkName, assemblyInfos, supportedFrameworkInfos, dlls.Item2);
         }
 
         public static IEnumerable<FrameworkName> GetFrameworkNames()
@@ -109,7 +102,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         private static IEnumerable<FrameworkName> GetFrameworkNames(
             [CanBeNull] DirectoryInfo baseDirInfo,
-            [CanBeNull] FrameworkNameBuiler name)
+            [CanBeNull] string identifier,
+            [CanBeNull] string version = null)
         {
             if (baseDirInfo == null)
             {
@@ -122,7 +116,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
             IEnumerable<FrameworkName> result = Enumerable.Empty<FrameworkName>();
             var dirs = baseDirInfo.GetDirectories();
-            if (name == null || name.Identifier == null)
+            if (identifier == null)
             {
                 foreach (var subDirInfo in dirs)
                 {
@@ -132,18 +126,19 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         result = result.Concat(
                             GetFrameworkNames(
                                 subDirInfo,
-                                new FrameworkNameBuiler(".NETFramework", match.Groups[1].Value)));
+                                ".NETFramework",
+                                match.Groups[1].Value));
                     }
                     else
                     {
                         result = result.Concat(
                             GetFrameworkNames(
                                 subDirInfo,
-                                new FrameworkNameBuiler(subDirInfo.Name)));
+                                subDirInfo.Name));
                     }
                 }
             }
-            else if (name.Version == null)
+            else if (version == null)
             {
                 foreach (var subDirInfo in dirs)
                 {
@@ -153,14 +148,15 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         result = result.Concat(
                             GetFrameworkNames(
                                 subDirInfo,
-                                new FrameworkNameBuiler(name.Identifier, match.Groups[1].Value)));
+                                identifier,
+                                match.Groups[1].Value));
                     }
                 }
             }
-            else if (name.Profile == null)
+            else
             {
                 if (dirs.Any(d => d.Name == "RedistList"))
-                    result = result.Concat(new[] { name.ToFrameworkName() });
+                    result = result.Concat(new[] { new FrameworkName(identifier, new Version(version)) });
 
                 var dirSubsetList = dirs.SingleOrDefault(d => d.Name == "SubsetList");
                 if (dirSubsetList != null)
@@ -168,7 +164,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     result = result.Concat(
                         dirSubsetList.GetFiles("*.xml")
                             .Select(f => Path.GetFileNameWithoutExtension(f.FullName))
-                            .Select(n => new FrameworkName(name.Identifier, new Version(name.Version), n))
+                            .Select(n => new FrameworkName(identifier, new Version(version), n))
                             .ToArray());
                 }
 
@@ -178,57 +174,86 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 {
                     foreach (var profileDirInfo in dirProfile.GetDirectories())
                         if (profileDirInfo.GetDirectories().Any(d => d.Name == "RedistList"))
-                            result = result.Concat(new[] { new FrameworkName(name.Identifier, new Version(name.Version), profileDirInfo.Name) });
+                            result = result.Concat(new[] { new FrameworkName(identifier, new Version(version), profileDirInfo.Name) });
                 }
             }
 
             return result;
         }
 
-        [CanBeNull]
-        private static string[] GetFrameworkLibraries(MultiDirectoryInfo directory, FrameworkName frameworkName, bool ignoreMissing)
+        [NotNull]
+        private static Tuple<string[], string[]> GetFrameworkLibraries(
+            DirectoryChain directory,
+            FrameworkName frameworkName)
         {
+            // NOTES:
+            //          DirectoryChain
+            //
+            //  Represents multiple directories at the same time, like an inheritance chain.
+            //  When files are searched, only one file with each name will be returned.
+            //  If the same file exists in more than one node in the chain, the foremost one is returned.
+            //  When directories are searched, if multiple are found, they will form a new DirectoryChain,
+            //      ordered in correspondence with the parents.
+            //
+            //  This class allows profiles of frameworks, inheriting the parent framework DLLs,
+            //  and other files, but also allowing it to override any file that overlaps.
+
             // getting all assemblies
             var dlls = directory.GetFiles("*.dll");
+
+            // getting list of XML files representing profiles
             var subsetDir = directory.GetDirectories("SubsetList").SingleOrDefault();
-            var profilesXml = subsetDir == null ? null : subsetDir.GetFiles(frameworkName.Profile + ".xml").SingleOrDefault();
+            var profilesXml = subsetDir == null
+                ? null
+                : subsetDir.GetFiles(frameworkName.Profile + ".xml").SingleOrDefault();
+
+            // getting XML that indicates a distribution
             var redistDir = directory.GetDirectories("RedistList").SingleOrDefault();
             var frameworkXml = redistDir == null ? null : redistDir.GetFiles("FrameworkList.xml").SingleOrDefault();
+
+            // selecting either framework or profile XML
             var xml = frameworkXml ?? profilesXml;
 
             if (xml == null || xml.Length <= 0)
-                return dlls.Select(x => x.FullName).ToArray();
+                return Tuple.Create(dlls.Select(x => x.FullName).ToArray(), new string[0]);
 
             var xdoc = XDocument.Load(xml.FullName);
             var filteredDllsInGac = xdoc
                 .Descendants("File")
-                .Where(x => x.Attribute("InGac", StringComparer.InvariantCultureIgnoreCase) != null && x.Attribute("InGac", StringComparer.InvariantCultureIgnoreCase).Value == "true")
-                .Select(x => x.Attribute("AssemblyName", StringComparer.InvariantCultureIgnoreCase).Value + ".dll")
-                .ToDictionary(x => x, x => dlls.SingleOrDefault(y => StringComparer.InvariantCultureIgnoreCase.Equals(y.Name, x)));
+                .Where(x => x.AttributeI("InGac") != null && x.AttributeI("InGac").Value == "true")
+                .Select(x => x.AttributeI("AssemblyName").Value + ".dll")
+                .GroupBy(x => x)
+                .ToDictionary(
+                    x => x.Key,
+                    x => dlls.SingleOrDefault(y => StringComparer.InvariantCultureIgnoreCase.Equals(y.Name, x.First())));
 
             var filteredDllsNotInGac = xdoc
                 .Descendants("File")
-                .Where(x => x.Attribute("InGac", StringComparer.InvariantCultureIgnoreCase) == null || x.Attribute("InGac", StringComparer.InvariantCultureIgnoreCase).Value != "true")
-                .Select(x => x.Attribute("AssemblyName", StringComparer.InvariantCultureIgnoreCase).Value + ".dll")
-                .ToDictionary(x => x, x => dlls.SingleOrDefault(y => StringComparer.InvariantCultureIgnoreCase.Equals(y.Name, x)));
+                .Where(x => x.AttributeI("InGac") == null || x.AttributeI("InGac").Value != "true")
+                .Select(x => x.AttributeI("AssemblyName").Value + ".dll")
+                .GroupBy(x => x)
+                .ToDictionary(
+                    x => x.Key,
+                    x => dlls.SingleOrDefault(y => StringComparer.InvariantCultureIgnoreCase.Equals(y.Name, x.First())));
 
-            foreach (var kvInGac in filteredDllsInGac)
-                filteredDllsNotInGac.Remove(kvInGac.Key);
+            foreach (var kv in filteredDllsInGac)
+                filteredDllsNotInGac.Remove(kv.Key);
 
-            if (filteredDllsNotInGac.Any(x => x.Value == null))
-            {
-                if (ignoreMissing)
-                    return null;
+            var missing = filteredDllsNotInGac.Where(x => x.Value == null).Select(x => x.Key).ToArray();
 
-                throw new Exception("Required file was not found.");
-            }
+            foreach (var k in missing)
+                filteredDllsNotInGac.Remove(k);
 
-            return filteredDllsInGac.Where(x => x.Value != null).Select(x => x.Value.FullName)
+            var nonMissing = filteredDllsInGac
+                .Where(x => x.Value != null)
+                .Select(x => x.Value.FullName)
                 .Concat(filteredDllsNotInGac.Select(x => x.Value.FullName))
                 .ToArray();
+
+            return Tuple.Create(nonMissing, missing);
         }
 
-        private static MultiDirectoryInfo GetPolyDirectoryInfoFor(FrameworkName frameworkName)
+        private static DirectoryChain GetPolyDirectoryInfoFor(FrameworkName frameworkName)
         {
             var versionNum = "v" + frameworkName.Version;
 
@@ -260,7 +285,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     frameworkName.Profile);
 
             // listing all assemblies from base directories
-            var dir = new MultiDirectoryInfo(
+            var dir = new DirectoryChain(
                 new[] { basePath, basePathOld, profilePath, profilePathOld }
                     .Where(x => !string.IsNullOrEmpty(x))
                     .Where(Directory.Exists)
@@ -355,6 +380,12 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         {
             return element.Attributes().SingleOrDefault(
                 xa => comparer.Equals(xa.Name.LocalName, name));
+        }
+
+        public static XAttribute AttributeI(this XElement element, string name)
+        {
+            return element.Attributes().SingleOrDefault(
+                xa => StringComparer.InvariantCultureIgnoreCase.Equals(xa.Name.LocalName, name));
         }
 
         public static XElement Element(this XElement element, string name, IEqualityComparer<string> comparer)

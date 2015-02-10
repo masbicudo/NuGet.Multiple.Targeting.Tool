@@ -23,13 +23,13 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 #if DEBUG
             aargs += @" -solution: C:\Projetos\DataStructures\DataStructures.net45.sln";
 #endif
+            var frmk0 = await FrameworkInfo.CreateAsync(new FrameworkName(".NETFramework", new Version("4.0"), "Client"));
+
             var allFrameworks = FrameworkInfo.GetFrameworkNames();
 
-            var allFrmkInfo = allFrameworks
-                .Select(FrameworkInfo.CreateAsync)
-                .Select(x => x.Result)
-                .Where(x => x != null)
-                .ToArray();
+            var allFrmkInfoTasks = allFrameworks.Select(FrameworkInfo.CreateAsync).ToArray();
+            await Task.WhenAll(allFrmkInfoTasks);
+            var allFrmkInfo = allFrmkInfoTasks.Select(t => t.Result).ToArray();
 
             var frmk1 = await FrameworkInfo.CreateAsync(new FrameworkName(".NETPortable", new Version("4.0"), "Profile2"));
             var frmk2 = await FrameworkInfo.CreateAsync(new FrameworkName(".NETPortable", new Version("4.0"), "Profile3"));
