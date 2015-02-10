@@ -1,0 +1,79 @@
+// https://github.com/"nuget"/"nuget"Docs/blob/master/"nuget".Docs/Create/Enforced-Package-Conventions.md
+// https://forums.xamarin.com/discussion/20773/installing-sqlite-extensions-pcl
+{
+    "net11": {
+        "tool": ".NET 1.1",
+        "frmk": { "name":  ".NETFramework", "version":  "v1.1" }
+    },
+    "net20": {
+        "tool": ".NET 2.0",
+        "frmk": { "name":  ".NETFramework", "version":  "v2.0" }
+    },
+    "net35": {
+        "tool": ".NET 3.5",
+        "frmk": { "name":  ".NETFramework", "version":  "v3.5" }
+    },
+    "net4": { "alias": "net40" },
+    "net4-full": { "alias": "net40" },
+    "net40-full": { "alias": "net40" },
+    "net40": {
+        "tool": ".NET 4.0",
+        "frmk": { "name":  ".NETFramework", "version":  "v4.0" }
+    },
+    "net4-client": { "alias": "net40-client" },
+    "net40-client": {
+        "tool": "NET 4.0 Client Profile",
+        "frmk": { "name":  ".NETFramework", "version":  "v4.0", "profile":  "Client" }
+    },
+    "net40-cf": {
+        "tool": ".NET 4.0 Compact Framework"
+    },
+    "netmf": {
+        "tool": ".NET Micro Framework"
+    },
+    "sl3": {
+        "tool": "Silverlight 3.0"
+    },
+    "sl4": {
+        "tool": "Silverlight 4.0"
+    },
+    "sl5": {
+        "tool": "Silverlight 5.0"
+    },
+    "sl3-wp": {
+        "tool": "Windows Phone 7.0"
+    },
+    "wp7": {
+        "tool": ""
+    },
+    "sl4-windowsphone71": {
+        "tool": "Windows Phone 7.1 (Mango)"
+    },
+    "wp71": {
+        "tool": "",
+        "nuget": "2.1+"
+    },
+    "windowsphone8": {
+        "tool": "Windows Phone 8 (Silverlight-based)",
+        "nuget": "2.1+"
+    },
+    "wpa": {
+        "tool": "Windows Phone App 8.1 (WinRT-based)",
+        "nuget": "2.8.1+"
+    },
+    "netcore45": {
+        "tool": "Windows Store apps (Javascript, C#, VB.NET)"
+    },
+    "windows8": {
+        "tool": "",
+        "nuget": "2.1+"
+    },
+    "portable-windows8+net45": {
+        "tool": "Portable class library for Windows Store apps and .NET 4.5",
+        "nuget": "2.1+"
+    },
+    "portable-sl4+wp71+windows8": {
+        "tool": "Portable class library for Windows Store apps, Silverlight 4.0 and Windows Phone 7.1",
+        "nuget": "2.1+"
+    }
+}

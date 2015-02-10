@@ -1,0 +1,28 @@
+// NOTES:
+//  1.  Types/Namespaces are considered supported, unless they are found in this file.
+//  2.  Found types must indicate all supported frameworks, otherwise they are considered not supported.
+//  3.  Type members are considered supported, unless otherwise stated.
+//  4.  Generic type variance support in indicated in the "profiles.json" file.
+//  5.  Adapters can be created to support types that would otherwise be unsupported, see 'adapters' folder.
+// https://msdn.microsoft.com/en-us/library/gg597391(v=vs.110).aspx
+{
+    "System.Collections.Generic.IReadOnlyList`1": {
+        "type-params": [ "out" ],
+        "profiles": {
+            "portable": [
+                "net45",
+                "net451",
+                "win",
+                "win8",
+                "win81",
+                "wpa81",
+                "wp80",
+                "wp81"
+            ]
+        }
+    },
+    "t:IEnumerable`1": {
+        "type-params": [ "out" ],
+        "profiles": "*"
+    }
+}
