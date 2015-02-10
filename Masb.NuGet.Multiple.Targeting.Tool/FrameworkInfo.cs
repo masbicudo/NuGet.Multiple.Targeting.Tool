@@ -13,29 +13,42 @@ using JetBrains.Annotations;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
 {
-    public class FrameworkInfo
+    public class FrameworkInfo : IEquatable<FrameworkInfo>
     {
-        public FrameworkInfo(
-            FrameworkName frameworkName,
-            IEnumerable<AssemblyInfo> assemblyInfos,
-            IEnumerable<IUndeterminedSet<FrameworkName>> supportedFrameworks,
-            IEnumerable<string> missngDlls)
+        internal FrameworkInfo(
+            [NotNull] FrameworkName frameworkName,
+            [NotNull] IEnumerable<AssemblyInfo> assemblyInfos,
+            [CanBeNull] IEnumerable<IUndeterminedSet<FrameworkName>> supportedFrameworks,
+            [CanBeNull] IEnumerable<string> missingDlls)
         {
-            this.SupportedFrameworks = new IntersectionSet<FrameworkName>(supportedFrameworks);
+            if (frameworkName == null)
+                throw new ArgumentNullException("frameworkName");
+
+            if (assemblyInfos == null)
+                throw new ArgumentNullException("assemblyInfos");
+
+            missingDlls = missingDlls ?? Enumerable.Empty<string>();
+
+            this.SupportedFrameworks = supportedFrameworks == null
+                ? new FrameworkNameSet(frameworkName)
+                : new IntersectionSet<FrameworkName>(supportedFrameworks) as IUndeterminedSet<FrameworkName>;
+
             this.FrameworkName = frameworkName;
             this.AssemblyInfos = assemblyInfos.ToImmutableArray();
-            this.MissingAssemblies = missngDlls.ToImmutableArray();
+            this.MissingAssemblies = missingDlls.ToImmutableArray();
         }
 
         /// <summary>
         /// Gets the list of frameworks that are supported by this profile, all at the same time,
         /// that is, an intersection, not an union.
         /// </summary>
-        public IntersectionSet<FrameworkName> SupportedFrameworks { get; private set; }
+        [NotNull]
+        public IUndeterminedSet<FrameworkName> SupportedFrameworks { get; private set; }
 
         /// <summary>
         /// Gets the name of the framework to which the information refers to.
         /// </summary>
+        [NotNull]
         public FrameworkName FrameworkName { get; private set; }
 
         /// <summary>
@@ -55,6 +68,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// <returns>A Task that returns a FrameworkInfo object when all information is ready.</returns>
         public static async Task<FrameworkInfo> CreateAsync(FrameworkName frameworkName)
         {
+            ConsoleHelper.WriteLine("Framework " + frameworkName, ConsoleColor.Yellow, 0);
+
             var directory = GetPolyDirectoryInfoFor(frameworkName);
             var dlls = GetFrameworkLibraries(directory, frameworkName);
 
@@ -65,7 +80,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             // reading framework metadata
             var supportDir = directory.GetDirectory("SupportedFrameworks");
 
-            var supportedFrameworkInfos = new List<FrameworkFilter>();
+            List<FrameworkFilter> supportedFrameworkInfos = null;
             if (supportDir != null)
             {
                 var supportXml = supportDir.GetFiles("*.xml");
@@ -73,11 +88,34 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 {
                     var data = await XmlHelpers.DesserializeAsync<SupportedFrameworkItem>(fileInfo.FullName);
                     var xpto = new FrameworkFilter(data);
+                    supportedFrameworkInfos = supportedFrameworkInfos ?? new List<FrameworkFilter>();
                     supportedFrameworkInfos.Add(xpto);
                 }
             }
 
             return new FrameworkInfo(frameworkName, assemblyInfos, supportedFrameworkInfos, dlls.Item2);
+        }
+
+        public static async Task<ImmutableArray<FrameworksGraph>> GetFrameworkGraphs()
+        {
+            var allFrmkInfo = await FrameworkInfo.GetFrameworkInfos();
+            var nodes = FrameworksGraph.Create(allFrmkInfo);
+
+            foreach (var node in nodes)
+                node.Visit(path => ConsoleHelper.WriteLine(path.Peek().ToString(), ConsoleColor.White, path.Count - 1));
+
+            return nodes;
+        }
+
+        public static async Task<FrameworkInfo[]> GetFrameworkInfos()
+        {
+            var allFrameworks = FrameworkInfo.GetFrameworkNames();
+
+            var allFrmkInfoTasks = allFrameworks.Select(FrameworkInfo.CreateAsync).ToArray();
+            await Task.WhenAll(allFrmkInfoTasks);
+            var allFrmkInfo = allFrmkInfoTasks.Select(t => t.Result).ToArray();
+
+            return allFrmkInfo;
         }
 
         public static IEnumerable<FrameworkName> GetFrameworkNames()
@@ -299,10 +337,18 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// that is, if the other framework can be swapped with the current one.
         /// </summary>
         /// <param name="other">The framework to test.</param>
-        /// <returns></returns>
+        /// <returns>True when it is a super set; False when not a super set; null when not sure.</returns>
         public bool? IsSupersetOf(FrameworkInfo other)
         {
-            var supportsAllFrmks = this.SupportedFrameworks.Contains(other.SupportedFrameworks);
+            var thisSupportedSet = this.SupportedFrameworks == null
+                ? new FrameworkNameSet(this.FrameworkName)
+                : this.SupportedFrameworks as IUndeterminedSet<FrameworkName>;
+
+            var otherSupportedSet = other.SupportedFrameworks == null
+                ? new FrameworkNameSet(other.FrameworkName)
+                : other.SupportedFrameworks as IUndeterminedSet<FrameworkName>;
+
+            var supportsAllFrmks = thisSupportedSet.Contains(otherSupportedSet);
 
             if (supportsAllFrmks != null)
                 return supportsAllFrmks.Value;
@@ -320,6 +366,13 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 return false;
 
             return null;
+        }
+
+        public IEnumerable<FrameworkInfo> FindSubsets(IEnumerable<FrameworkInfo> others)
+        {
+            foreach (var other in others)
+                if (this.IsSupersetOf(other) == true && other.IsSupersetOf(this) != true)
+                    yield return other;
         }
 
         public override string ToString()
@@ -372,26 +425,12 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 public string MinimumVersion { get; set; }
             }
         }
-    }
 
-    public static class XDocExtensions
-    {
-        public static XAttribute Attribute(this XElement element, string name, IEqualityComparer<string> comparer)
+        public bool Equals(FrameworkInfo other)
         {
-            return element.Attributes().SingleOrDefault(
-                xa => comparer.Equals(xa.Name.LocalName, name));
-        }
-
-        public static XAttribute AttributeI(this XElement element, string name)
-        {
-            return element.Attributes().SingleOrDefault(
-                xa => StringComparer.InvariantCultureIgnoreCase.Equals(xa.Name.LocalName, name));
-        }
-
-        public static XElement Element(this XElement element, string name, IEqualityComparer<string> comparer)
-        {
-            return element.Elements().SingleOrDefault(
-                xa => comparer.Equals(xa.Name.LocalName, name));
+            return other != null
+                   && this.IsSupersetOf(other) == true
+                   && other.IsSupersetOf(this) == true;
         }
     }
 }

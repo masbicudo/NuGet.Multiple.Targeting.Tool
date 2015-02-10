@@ -23,18 +23,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 #if DEBUG
             aargs += @" -solution: C:\Projetos\DataStructures\DataStructures.net45.sln";
 #endif
-            var frmk0 = await FrameworkInfo.CreateAsync(new FrameworkName(".NETFramework", new Version("4.0"), "Client"));
-
-            var allFrameworks = FrameworkInfo.GetFrameworkNames();
-
-            var allFrmkInfoTasks = allFrameworks.Select(FrameworkInfo.CreateAsync).ToArray();
-            await Task.WhenAll(allFrmkInfoTasks);
-            var allFrmkInfo = allFrmkInfoTasks.Select(t => t.Result).ToArray();
-
-            var frmk1 = await FrameworkInfo.CreateAsync(new FrameworkName(".NETPortable", new Version("4.0"), "Profile2"));
-            var frmk2 = await FrameworkInfo.CreateAsync(new FrameworkName(".NETPortable", new Version("4.0"), "Profile3"));
-
-            var isSuper = frmk2.IsSupersetOf(frmk1);
+            ConsoleHelper.IsActive = true;
+            var nodes = await FrameworkInfo.GetFrameworkGraphs();
 
             // looking for all solutions in the current directory
             var slnPathesMatch = Regex.Matches(aargs, @"(?<=\s|^)\-solution:\s+(?:""(?<SLN>[^""]*\.sln)""|(?<SLN>\S*?\.sln))(?=\s+\-|$)").OfType<Match>();

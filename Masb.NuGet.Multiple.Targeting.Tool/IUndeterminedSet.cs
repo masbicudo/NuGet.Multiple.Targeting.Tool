@@ -19,8 +19,20 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// <param name="set">The set to test.</param>
         /// <returns>
         /// Returns a optional boolean indicating whether the set is a subset for sure,
-        ///  or not, returning null when it is not possible to know.
+        /// or not, returning null when it is not possible to know.
         /// </returns>
         bool? Contains(IUndeterminedSet<T> set);
+
+        /// <summary>
+        /// Determines whether another set has an intersection with this set.
+        /// </summary>
+        /// <param name="set">The set to test.</param>
+        /// <returns>
+        /// Returns a optional boolean indicating whether the set intersects for sure,
+        /// or not, returning null when it is not possible to know.
+        /// </returns>
+        bool? Intersects(IUndeterminedSet<T> set);
+
+        bool? IsEmpty();
     }
 }

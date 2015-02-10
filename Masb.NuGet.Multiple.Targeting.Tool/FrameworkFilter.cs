@@ -151,11 +151,73 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// </summary>
         /// <param name="frameworkName">FrameworkName to test.</param>
         /// <returns>Returns a boolean indicating whether the item is in the set.</returns>
-        public bool Contains(FrameworkName frameworkName)
+        public bool Contains([NotNull] FrameworkName frameworkName)
         {
+            if (frameworkName == null)
+                throw new ArgumentNullException("frameworkName");
+
             return IsStrMatch(frameworkName.Identifier, this.Identifier)
                    && (this.MinimumVersion == null || frameworkName.Version >= this.MinimumVersion)
                    && IsStrMatch(frameworkName.Profile, this.Profile);
+        }
+
+        public bool? Intersects([NotNull] IUndeterminedSet<FrameworkName> set)
+        {
+            if (set == null)
+                throw new ArgumentNullException("set");
+
+            if (set.IsEmpty() == true)
+                return false;
+
+            var frmkNameSet = set as FrameworkNameSet;
+            if (frmkNameSet != null)
+                return this.Intersects(frmkNameSet);
+
+            var filter = set as FrameworkFilter;
+            if (filter != null)
+                return this.Intersects(filter);
+
+            return null;
+        }
+
+        public bool? IsEmpty()
+        {
+            return false;
+        }
+
+        public bool Intersects([NotNull] FrameworkNameSet frmkNameSet)
+        {
+            if (frmkNameSet == null)
+                throw new ArgumentNullException("frmkNameSet");
+
+            return Intersects(this, frmkNameSet.FrameworkName);
+        }
+
+        internal static bool Intersects([NotNull] FrameworkFilter filter, [NotNull] FrameworkName frmkName)
+        {
+            return IsStrMatch(frmkName.Identifier, filter.Identifier)
+                   && (filter.MinimumVersion == null || frmkName.Version.Major >= filter.MinimumVersion.Major)
+                   && IsStrMatch(frmkName.Profile, filter.Profile);
+        }
+
+        public bool Intersects([NotNull] FrameworkFilter filter)
+        {
+            if (filter == null)
+                throw new ArgumentNullException("filter");
+
+            var intersectsId = IsStrMatch(filter.Identifier, this.Identifier)
+                               || IsStrMatch(this.Identifier, filter.Identifier)
+                               || StringComparer.InvariantCultureIgnoreCase.Equals(
+                                   this.Identifier.Replace("*", ""),
+                                   filter.Identifier.Replace("*", ""));
+
+            var intersectsProf = IsStrMatch(filter.Profile, this.Profile)
+                               || IsStrMatch(this.Profile, filter.Profile)
+                               || StringComparer.InvariantCultureIgnoreCase.Equals(
+                                   this.Profile.Replace("*", ""),
+                                   filter.Profile.Replace("*", ""));
+
+            return intersectsId && intersectsProf;
         }
 
         /// <summary>
@@ -174,6 +236,10 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 var result = this.Contains(frameworkFilter);
                 return result;
             }
+
+            var nset = set as FrameworkNameSet;
+            if (nset != null)
+                return this.Contains(nset.FrameworkName);
 
             return null;
         }
