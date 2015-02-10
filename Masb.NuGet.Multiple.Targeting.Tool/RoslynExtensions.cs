@@ -70,6 +70,10 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         public static async Task<Compilation> GetCompilationWithNetReferences(this Project project, FrameworkName frameworkName)
         {
             var frameworkInfo = await FrameworkInfo.CreateAsync(frameworkName);
+
+            if (frameworkInfo == null)
+                throw new Exception("Invalid framework name");
+
             var libraries = frameworkInfo.AssemblyInfos
                 .Select(x => x.HintFile)
                 .ToDictionary(Path.GetFileNameWithoutExtension);

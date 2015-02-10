@@ -109,6 +109,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="FrameworkInfo.cs" />
+    <Compile Include="FrameworkNameBuiler.cs" />
     <Compile Include="IUndeterminedSet.cs" />
     <Compile Include="IntersectionSet.cs" />
     <Compile Include="JetBrains.Annotations\JetBrains.Annotations.cs" />
