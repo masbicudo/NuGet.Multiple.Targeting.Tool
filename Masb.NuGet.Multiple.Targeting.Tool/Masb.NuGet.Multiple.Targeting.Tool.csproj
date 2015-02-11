@@ -110,6 +110,7 @@
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="ConsoleHelper.cs" />
     <Compile Include="FrameworkInfo.cs" />
+    <Compile Include="FrameworkRequirements.cs" />
     <Compile Include="FrameworksGraph.cs" />
     <Compile Include="FrameworkNameSet.cs" />
     <Compile Include="IUndeterminedSet.cs" />
@@ -120,6 +121,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RoslynExtensions.cs" />
     <Compile Include="FrameworkFilter.cs" />
+    <Compile Include="SupportNode.cs" />
     <Compile Include="TypeSymbolInfo.cs" />
     <Compile Include="UsedTypeLocator.cs" />
     <Compile Include="XDocExtensions.cs" />

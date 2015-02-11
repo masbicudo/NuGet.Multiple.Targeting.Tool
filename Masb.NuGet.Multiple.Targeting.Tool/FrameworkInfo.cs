@@ -96,15 +96,15 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return new FrameworkInfo(frameworkName, assemblyInfos, supportedFrameworkInfos, dlls.Item2);
         }
 
-        public static async Task<ImmutableArray<FrameworksGraph>> GetFrameworkGraphs()
+        public static async Task<FrameworksGraph> GetFrameworkGraph()
         {
             var allFrmkInfo = await FrameworkInfo.GetFrameworkInfos();
             var nodes = FrameworksGraph.Create(allFrmkInfo);
 
             foreach (var node in nodes)
-                node.Visit(path => ConsoleHelper.WriteLine(path.Peek().ToString(), ConsoleColor.White, path.Count - 1));
+                node.Visit(path => ConsoleHelper.WriteLine(path.Peek().ToString(), ConsoleColor.White, path.Count() - 1));
 
-            return nodes;
+            return new FrameworksGraph(null, nodes);
         }
 
         public static async Task<FrameworkInfo[]> GetFrameworkInfos()

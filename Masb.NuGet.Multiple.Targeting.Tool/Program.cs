@@ -1,7 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Linq;
-using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
@@ -24,15 +24,15 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             aargs += @" -solution: C:\Projetos\DataStructures\DataStructures.net45.sln";
 #endif
             ConsoleHelper.IsActive = true;
-            var nodes = await FrameworkInfo.GetFrameworkGraphs();
+            var nodes = await FrameworkInfo.GetFrameworkGraph();
 
             // looking for all solutions in the current directory
             var slnPathesMatch = Regex.Matches(aargs, @"(?<=\s|^)\-solution:\s+(?:""(?<SLN>[^""]*\.sln)""|(?<SLN>\S*?\.sln))(?=\s+\-|$)").OfType<Match>();
             var slnPathes = slnPathesMatch.Select(m => m.Groups["SLN"].Value).ToArray();
-            await AnalyseSolutionsAsync(slnPathes);
+            await AnalyseSolutionsAsync(slnPathes, nodes);
         }
 
-        private static async Task AnalyseSolutionsAsync(IEnumerable<string> slnPathes)
+        private static async Task AnalyseSolutionsAsync(IEnumerable<string> slnPathes, FrameworksGraph frameworkGraph)
         {
             var workspace = MSBuildWorkspace.Create();
             foreach (var slnPath in slnPathes)
@@ -88,7 +88,21 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                             locator.VisitSyntax(root);
                         }
 
-                        usedTypes = locator.UsedTypes;
+                        var frameworkRequirements = new FrameworkRequirements
+                            {
+                                Compilation = compilation,
+
+                                Types = locator.UsedTypes
+                                    .Select(TypeSymbolInfo.Create)
+                                    .Where(t => t.TypeName != "System.Runtime.InteropServices.GuidAttribute")
+                                    .Where(t => t.TypeName != "System.Runtime.InteropServices.ComVisibleAttribute")
+                                    .ToArray(),
+                            };
+
+                        // determining what frameworks support this set of types
+                        var supportedFrameworks = frameworkRequirements.GetSupportGraph(frameworkGraph);
+
+                        Debugger.Break();
                     }
                 }
 

@@ -1,7 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using JetBrains.Annotations;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
 {
@@ -22,7 +23,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 var master = sets[it];
                 if (master.item != null)
                 {
-                    ConsoleHelper.Write("Item " + it + ": ", ConsoleColor.Green, level);
+                    ConsoleHelper.Write("" + master.item + ": {", ConsoleColor.Green, level);
 
                     Array.Clear(subsets, 0, subsets.Length);
 
@@ -31,7 +32,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         if (it != it2)
                         {
                             var child = sets[it2];
-                            var item = child.item ?? (child.graph == null ? null : child.graph.Item);
+                            var item = child.item ?? (child.graph == null ? null : child.graph.FrameworkInfo);
                             if (item != null && master.item.IsSupersetOf(item) == true)
                             {
                                 ConsoleHelper.Write("*", ConsoleColor.Gray);
@@ -42,7 +43,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         }
                     }
 
-                    ConsoleHelper.WriteLine();
+                    ConsoleHelper.WriteLine("}", ConsoleColor.Green);
 
                     FrameworksGraphs(subsets, level + 1);
                     sets[it] = new S
@@ -55,45 +56,80 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             }
         }
 
-        private FrameworksGraph(FrameworkInfo item, ImmutableArray<FrameworksGraph> subsets)
+        internal FrameworksGraph([CanBeNull] FrameworkInfo frameworkInfo, ImmutableArray<FrameworksGraph> subsets)
         {
-            this.Item = item;
+            this.FrameworkInfo = frameworkInfo;
             this.Subsets = subsets;
         }
 
-        public FrameworkInfo Item { get; private set; }
+        [CanBeNull]
+        public FrameworkInfo FrameworkInfo { get; private set; }
 
         public ImmutableArray<FrameworksGraph> Subsets { get; private set; }
 
         public override string ToString()
         {
-            return this.Item.ToString();
+            return this.FrameworkInfo == null ? "Master" : this.FrameworkInfo.ToString();
         }
 
         struct S
         {
             public FrameworkInfo item;
             public FrameworksGraph graph;
+
+            public static bool HasValue(S s)
+            {
+                return !(s.item == null && s.graph == null);
+            }
         }
 
-        public void Visit(Action<Stack<FrameworksGraph>> action)
+        public TNode Visit<TNode>(
+            Func<ImmutableStack<FrameworksGraph>, IEnumerable<TNode>, TNode> func)
         {
-            this.Visit(this, new Stack<FrameworksGraph>(), action);
+            return this.Visit(this, ImmutableStack<FrameworksGraph>.Empty, func);
         }
 
-        private void Visit(FrameworksGraph graph, Stack<FrameworksGraph> stack, Action<Stack<FrameworksGraph>> action)
+        public TNode Visit<TNode, TContext>(
+            TContext context,
+            Func<ImmutableStack<FrameworksGraph>, IEnumerable<TNode>, TContext, TNode> func)
         {
-            stack.Push(graph);
-            try
-            {
-                action(stack);
-                foreach (var each in graph.Subsets)
-                    this.Visit(each, stack, action);
-            }
-            finally
-            {
-                stack.Pop();
-            }
+            return this.Visit(context, this, ImmutableStack<FrameworksGraph>.Empty, func);
+        }
+
+        public void Visit(Action<ImmutableStack<FrameworksGraph>> action)
+        {
+            this.Visit(this, ImmutableStack<FrameworksGraph>.Empty, action);
+        }
+
+        private TNode Visit<TNode>(
+            FrameworksGraph graph,
+            ImmutableStack<FrameworksGraph> stack,
+            Func<ImmutableStack<FrameworksGraph>, IEnumerable<TNode>, TNode> func)
+        {
+            stack = stack.Push(graph);
+            var newChildren = graph.Subsets.Select(x => this.Visit(x, stack, func));
+            var result = func(stack, newChildren);
+            return result;
+        }
+
+        private TNode Visit<TNode, TContext>(
+            TContext context,
+            FrameworksGraph graph,
+            ImmutableStack<FrameworksGraph> stack,
+            Func<ImmutableStack<FrameworksGraph>, IEnumerable<TNode>, TContext, TNode> func)
+        {
+            stack = stack.Push(graph);
+            var newChildren = graph.Subsets.Select(x => this.Visit(context, x, stack, func));
+            var result = func(stack, newChildren, context);
+            return result;
+        }
+
+        private void Visit(FrameworksGraph graph, ImmutableStack<FrameworksGraph> stack, Action<ImmutableStack<FrameworksGraph>> action)
+        {
+            stack = stack.Push(graph);
+            action(stack);
+            foreach (var each in graph.Subsets)
+                this.Visit(each, stack, action);
         }
     }
 }

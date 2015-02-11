@@ -95,5 +95,29 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             var compilation = await project2.GetCompilationAsync();
             return compilation;
         }
+
+        public static async Task<Compilation> RecompileWithNetReferences(this Compilation compilation, FrameworkName frameworkName)
+        {
+            var frameworkInfo = await FrameworkInfo.CreateAsync(frameworkName);
+
+            if (frameworkInfo == null)
+                throw new Exception("Invalid framework name");
+
+            var libraries = frameworkInfo.AssemblyInfos
+                .Select(x => x.HintFile)
+                .ToDictionary(Path.GetFileNameWithoutExtension);
+
+            var includes = compilation.References
+                .Select(x => Path.GetFileNameWithoutExtension(x.Display))
+                .Concat(new[] { "mscorlib" })
+                .Where(libraries.ContainsKey)
+                .Select(i => libraries[i])
+                .Select(fname => MetadataReference.CreateFromFile(fname))
+                .OfType<MetadataReference>()
+                .ToArray();
+
+            compilation = compilation.AddReferences(includes);
+            return compilation;
+        }
     }
 }

@@ -65,11 +65,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         private static IEnumerable<INamedTypeSymbol> LocateTypeSymbols(INamespaceOrTypeSymbol rootSymbol)
         {
             var a = rootSymbol.GetTypeMembers();
-            var ns = rootSymbol as INamespaceSymbol;
-            if (ns == null)
-                return a;
-
-            var b = ns.GetNamespaceMembers().SelectMany(LocateTypeSymbols);
+            var lookChildren = rootSymbol.GetMembers().OfType<INamespaceOrTypeSymbol>();
+            var b = lookChildren.SelectMany(LocateTypeSymbols);
             return a.Concat(b);
         }
 
