@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.Versioning;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using JetBrains.Annotations;
 using Microsoft.CodeAnalysis;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
@@ -60,31 +61,43 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return null;
         }
 
-        public static async Task<Compilation> GetCompilationWithNetReferences(this Project project)
+        public static async Task<Compilation> GetCompilationWithReferencesAsync(this Project project)
         {
             var frameworkName = project.GetFrameworkName();
-            var compilation = await project.GetCompilationWithNetReferences(frameworkName);
+            var compilation = await project.GetCompilationWithReferencesAsync(frameworkName);
             return compilation;
         }
 
-        public static async Task<Compilation> GetCompilationWithNetReferences(this Project project, FrameworkName frameworkName)
+        public static async Task<Compilation> GetCompilationWithReferencesAsync(
+            [NotNull] this Project project,
+            [NotNull] FrameworkName frameworkName)
         {
-            var frameworkInfo = await FrameworkInfo.CreateAsync(frameworkName);
+            if (project == null)
+                throw new ArgumentNullException("project");
+
+            if (frameworkName == null)
+                throw new ArgumentNullException("frameworkName");
+
+            var frameworkInfo = await FrameworkInfo.GetOrCreateAsync(frameworkName);
 
             if (frameworkInfo == null)
                 throw new Exception("Invalid framework name");
 
             var libraries = frameworkInfo.AssemblyInfos
-                .Select(x => x.HintFile)
-                .ToDictionary(Path.GetFileNameWithoutExtension);
+                .ToDictionary(x => x.RelativePath, frameworkInfo.GetAssemblyPath);
 
             var xdoc = XDocument.Load(project.FilePath);
             XNamespace msbuild = "http://schemas.microsoft.com/developer/msbuild/2003";
 
             var references = xdoc.Descendants(msbuild + "ItemGroup").Descendants(msbuild + "Reference");
-            var includes = references
+            var includesRelPaths = references
                 .Select(x => x.Attribute("Include").Value)
                 .Concat(new[] { "mscorlib" })
+                .Distinct(StringComparer.InvariantCultureIgnoreCase)
+                .Select(x => String.Format("~\\{0}.dll", x))
+                .ToArray();
+
+            var includes = includesRelPaths
                 .Where(libraries.ContainsKey)
                 .Select(i => libraries[i])
                 .Select(fname => MetadataReference.CreateFromFile(fname))
@@ -96,28 +109,116 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return compilation;
         }
 
-        public static async Task<Compilation> RecompileWithNetReferences(this Compilation compilation, FrameworkName frameworkName)
+        /// <summary>
+        /// Determines whether a metadata reference is a framework reference or not.
+        /// </summary>
+        /// <param name="reference">Metadata reference to test.</param>
+        /// <returns>True if the metadata reference refers to a framework assembly.</returns>
+        public static bool IsFrameworkReference(this MetadataReference reference)
         {
-            var frameworkInfo = await FrameworkInfo.CreateAsync(frameworkName);
+            var frmkName = PathHelper.GetFrameworkName(reference.Display);
+            return frmkName != null;
+        }
+
+        /// <summary>
+        /// Recompiles a compilation with a new target framework.
+        /// </summary>
+        /// <param name="compilation">Compilation to recompile.</param>
+        /// <param name="frameworkInfo">New target framework.</param>
+        /// <param name="relativeReferences">Framework references that need to be added.</param>
+        /// <returns>A new compilation targeting the passed framework.</returns>
+        public static Compilation RecompileWithReferences(
+            [NotNull] this Compilation compilation,
+            [NotNull] FrameworkInfo frameworkInfo,
+            [NotNull] IEnumerable<string> relativeReferences)
+        {
+            if (compilation == null)
+                throw new ArgumentNullException("compilation");
 
             if (frameworkInfo == null)
-                throw new Exception("Invalid framework name");
+                throw new ArgumentNullException("frameworkInfo");
 
-            var libraries = frameworkInfo.AssemblyInfos
-                .Select(x => x.HintFile)
-                .ToDictionary(Path.GetFileNameWithoutExtension);
+            if (relativeReferences == null)
+                throw new ArgumentNullException("relativeReferences");
 
-            var includes = compilation.References
-                .Select(x => Path.GetFileNameWithoutExtension(x.Display))
-                .Concat(new[] { "mscorlib" })
-                .Where(libraries.ContainsKey)
-                .Select(i => libraries[i])
-                .Select(fname => MetadataReference.CreateFromFile(fname))
+            var includesRelPaths = new HashSet<string>(relativeReferences, StringComparer.InvariantCultureIgnoreCase);
+            includesRelPaths.RemoveWhere(String.IsNullOrWhiteSpace);
+
+            // getting current framework references and then
+            //  - if present in the new target framework: replace by the new reference
+            //  - otherwise: remove the reference
+            var currentFrmkRefs = compilation.References
+                .Where(IsFrameworkReference)
+                .ToArray();
+
+            var refsToRemove = new List<MetadataReference>(currentFrmkRefs.Length);
+            foreach (var eachFrmkRef in currentFrmkRefs)
+            {
+                var relativePath = eachFrmkRef.Display;
+                if (PathHelper.TryGetFrameworkRelativePath(ref relativePath))
+                {
+                    var newAssembly = frameworkInfo.GetAssemblyInfoByRelativePath(relativePath);
+                    if (newAssembly != null)
+                    {
+                        var newAssemblyPath = frameworkInfo.GetAssemblyPath(newAssembly);
+                        var newFrmkRef = MetadataReference.CreateFromFile(newAssemblyPath);
+                        compilation = compilation.ReplaceReference(eachFrmkRef, newFrmkRef);
+                    }
+                    else
+                    {
+                        refsToRemove.Add(eachFrmkRef);
+                    }
+
+                    // removing already existing references from the include list
+                    includesRelPaths.Remove(relativePath);
+                }
+            }
+
+            compilation = compilation.RemoveReferences(refsToRemove);
+
+            // creating the new inclusion list
+            var includes = includesRelPaths
+                .OrderBy(x => x)
+                .Select(frameworkInfo.GetAssemblyInfoByRelativePath)
+                .Select(frameworkInfo.GetAssemblyPath)
+                .Select(x => MetadataReference.CreateFromFile(x))
                 .OfType<MetadataReference>()
                 .ToArray();
 
             compilation = compilation.AddReferences(includes);
+
             return compilation;
+        }
+
+        /// <summary>
+        /// Gets the full name of a type or namespace symbol, including the owning namespace names separated by '.' character.
+        /// </summary>
+        /// <param name="symbol"></param>
+        /// <returns></returns>
+        public static string GetTypeFullName(this INamespaceOrTypeSymbol symbol)
+        {
+            var ns = symbol.ContainingNamespace;
+            return ns == null || !ns.IsGlobalNamespace
+                ? GetTypeFullName((INamespaceOrTypeSymbol)symbol.ContainingSymbol) + "." + GetSymbolName(symbol)
+                : GetSymbolName(symbol);
+        }
+
+        public static string GetSymbolName(this INamespaceOrTypeSymbol symbol)
+        {
+            var type = symbol as INamedTypeSymbol;
+            if (type != null && type.Arity > 0)
+                return type.Name + "`" + type.Arity;
+            return symbol.Name;
+        }
+
+        public static string[] GetVariance(this INamedTypeSymbol typeSymbol)
+        {
+            if (typeSymbol.TypeParameters.Any(tp => tp.Variance != VarianceKind.None))
+                return typeSymbol.TypeParameters
+                    .Select(tp => tp.Variance.ToString().ToLowerInvariant())
+                    .ToArray();
+
+            return null;
         }
     }
 }

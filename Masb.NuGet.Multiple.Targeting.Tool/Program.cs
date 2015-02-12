@@ -32,7 +32,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             await AnalyseSolutionsAsync(slnPathes, nodes);
         }
 
-        private static async Task AnalyseSolutionsAsync(IEnumerable<string> slnPathes, FrameworksGraph frameworkGraph)
+        private static async Task AnalyseSolutionsAsync(IEnumerable<string> slnPathes, HierarchyGraph hierarchyGraph)
         {
             var workspace = MSBuildWorkspace.Create();
             foreach (var slnPath in slnPathes)
@@ -76,7 +76,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 INamedTypeSymbol[] usedTypes;
                 foreach (var project in sortedProject)
                 {
-                    var compilation = await project.GetCompilationWithNetReferences();
+                    var compilation = await project.GetCompilationWithReferencesAsync();
                     var diag = compilation.GetDiagnostics();
                     if (diag.Length == 0)
                     {
@@ -93,14 +93,14 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                                 Compilation = compilation,
 
                                 Types = locator.UsedTypes
-                                    .Select(TypeSymbolInfo.Create)
-                                    .Where(t => t.TypeName != "System.Runtime.InteropServices.GuidAttribute")
-                                    .Where(t => t.TypeName != "System.Runtime.InteropServices.ComVisibleAttribute")
+                                    .Select(RoslynExtensions.GetTypeFullName)
+                                    .Where(t => t != "System.Runtime.InteropServices.GuidAttribute")
+                                    .Where(t => t != "System.Runtime.InteropServices.ComVisibleAttribute")
                                     .ToArray(),
                             };
 
                         // determining what frameworks support this set of types
-                        var supportedFrameworks = frameworkRequirements.GetSupportGraph(frameworkGraph);
+                        var supportedFrameworks = frameworkRequirements.GetSupportGraph(hierarchyGraph);
 
                         Debugger.Break();
                     }

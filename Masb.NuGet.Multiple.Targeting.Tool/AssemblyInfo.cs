@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Reflection;
+using JetBrains.Annotations;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
@@ -9,11 +11,28 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 {
     public class AssemblyInfo
     {
-        public AssemblyInfo(string hintFile, AssemblyName assemblyName, IEnumerable<TypeSymbolInfo> allTypes)
+        public AssemblyInfo(
+            [NotNull] string relativePath,
+            [NotNull] AssemblyName assemblyName,
+            [NotNull] IEnumerable<TypeSymbolInfo> allTypes)
         {
-            this.HintFile = hintFile;
+            if (relativePath == null)
+                throw new ArgumentNullException("relativePath");
+
+            if (assemblyName == null)
+                throw new ArgumentNullException("assemblyName");
+
+            if (allTypes == null)
+                throw new ArgumentNullException("allTypes");
+
+            if (!relativePath.StartsWith("~\\"))
+                throw new ArgumentException("Relative pathes must start with \"~\\\"", "relativePath");
+
+            this.RelativePath = relativePath;
             this.AssemblyName = assemblyName;
-            this.NamedTypes = allTypes.GroupBy(x => x.TypeName).ToImmutableDictionary(x => x.Key, x => x.First());
+            this.NamedTypes = allTypes
+                .GroupBy(x => x.TypeName)
+                .ToImmutableDictionary(x => x.Key, x => x.First());
             this.HasVariance = GetTypesWithVariance(this.NamedTypes).Any();
         }
 
@@ -26,7 +45,11 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         public bool HasVariance { get; private set; }
 
-        public string HintFile { get; private set; }
+        /// <summary>
+        /// Gets a framework relative path of the assembly.
+        /// This path always starts with "~\" to indicate it's condition.
+        /// </summary>
+        public string RelativePath { get; private set; }
 
         public AssemblyName AssemblyName { get; private set; }
 
@@ -38,8 +61,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 "__Extractor__",
                 options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary),
                 syntaxTrees: new CSharpSyntaxTree[0],
-                references: new[] { MetadataReference.CreateFromFile(assemblyFile) }
-                );
+                references: new[] { MetadataReference.CreateFromFile(assemblyFile) });
 
             var allTypes = Enumerable.Empty<INamedTypeSymbol>();
             var rootSymbols = compilation.GlobalNamespace.GetMembers();
@@ -58,6 +80,10 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     t => t.DeclaredAccessibility == Accessibility.Public
                          || t.DeclaredAccessibility == Accessibility.Protected)
                 .Select(TypeSymbolInfo.Create).ToImmutableHashSet();
+
+            if (!PathHelper.TryGetFrameworkRelativePath(ref assemblyFile))
+                // TODO: should we ever consider GAC assemblies?
+                throw new Exception("Framework assemblies must all be inside the framework path:\n - " + assemblyFile);
 
             return new AssemblyInfo(assemblyFile, assemblyName, allTypes2);
         }

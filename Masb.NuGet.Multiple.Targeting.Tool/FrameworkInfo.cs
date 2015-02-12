@@ -2,10 +2,12 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Xml.Serialization;
@@ -61,16 +63,68 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// </summary>
         public ImmutableArray<string> MissingAssemblies { get; private set; }
 
+        private object locker = new object();
+
+        private Dictionary<string, AssemblyInfo> assembliesByRelPath;
+
+        [CanBeNull]
+        public AssemblyInfo GetAssemblyInfoByRelativePath([NotNull] string relativePath)
+        {
+            if (relativePath == null)
+                throw new ArgumentNullException("relativePath");
+
+            if (!relativePath.StartsWith("~\\"))
+                throw new ArgumentException("Relative paths must start with \"~\\\"", "relativePath");
+
+            if (this.assembliesByRelPath == null)
+                lock (this.locker)
+                    this.assembliesByRelPath = this.assembliesByRelPath
+                                               ?? this.AssemblyInfos.ToDictionary(
+                                                   a => a.RelativePath,
+                                                   StringComparer.InvariantCultureIgnoreCase);
+
+            AssemblyInfo value;
+            this.assembliesByRelPath.TryGetValue(relativePath, out value);
+            return value;
+        }
+
+        private static readonly object cacheLocker = new object();
+
+        private static ImmutableDictionary<FrameworkName, FrameworkInfo> frmkInfoCache =
+            ImmutableDictionary<FrameworkName, FrameworkInfo>.Empty;
+
+        /// <summary>
+        /// Gets or creates a FrameworkInfo given a FrameworkName asynchronously,
+        /// but using a static cache to retrieve and store data.
+        /// </summary>
+        /// <param name="frameworkName">The framework to get information to.</param>
+        /// <returns>A Task that returns a FrameworkInfo object when all information is ready.</returns>
+        public static Task<FrameworkInfo> GetOrCreateAsync(FrameworkName frameworkName)
+        {
+            return CreateAsync(frameworkName, true);
+        }
+
         /// <summary>
         /// Creates a FrameworkInfo given a FrameworkName asynchronously.
         /// </summary>
         /// <param name="frameworkName">The framework to get information to.</param>
+        /// <param name="useCache">
+        /// Whether to use a global cache or not.
+        /// When true, reads existing values from the cache, and also stores new values in the cache.
+        /// </param>
         /// <returns>A Task that returns a FrameworkInfo object when all information is ready.</returns>
-        public static async Task<FrameworkInfo> CreateAsync(FrameworkName frameworkName)
+        public static async Task<FrameworkInfo> CreateAsync(FrameworkName frameworkName, bool useCache)
         {
+            if (useCache)
+            {
+                FrameworkInfo frmkInfo;
+                if (frmkInfoCache.TryGetValue(frameworkName, out frmkInfo))
+                    return frmkInfo;
+            }
+
             ConsoleHelper.WriteLine("Framework " + frameworkName, ConsoleColor.Yellow, 0);
 
-            var directory = GetPolyDirectoryInfoFor(frameworkName);
+            var directory = PathHelper.GetPolyDirectoryInfoFor(frameworkName);
             var dlls = GetFrameworkLibraries(directory, frameworkName);
 
             var assemblyInfos = dlls.Item1
@@ -93,25 +147,33 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 }
             }
 
-            return new FrameworkInfo(frameworkName, assemblyInfos, supportedFrameworkInfos, dlls.Item2);
+            var result = new FrameworkInfo(frameworkName, assemblyInfos, supportedFrameworkInfos, dlls.Item2);
+
+            if (useCache)
+            {
+                lock (cacheLocker)
+                    frmkInfoCache = frmkInfoCache.SetItem(frameworkName, result);
+            }
+
+            return result;
         }
 
-        public static async Task<FrameworksGraph> GetFrameworkGraph()
+        public static async Task<HierarchyGraph> GetFrameworkGraph()
         {
             var allFrmkInfo = await FrameworkInfo.GetFrameworkInfos();
-            var nodes = FrameworksGraph.Create(allFrmkInfo);
+            var nodes = HierarchyGraph.Create(allFrmkInfo);
 
             foreach (var node in nodes)
                 node.Visit(path => ConsoleHelper.WriteLine(path.Peek().ToString(), ConsoleColor.White, path.Count() - 1));
 
-            return new FrameworksGraph(null, nodes);
+            return new HierarchyGraph(null, nodes);
         }
 
         public static async Task<FrameworkInfo[]> GetFrameworkInfos()
         {
             var allFrameworks = FrameworkInfo.GetFrameworkNames();
 
-            var allFrmkInfoTasks = allFrameworks.Select(FrameworkInfo.CreateAsync).ToArray();
+            var allFrmkInfoTasks = allFrameworks.Select(FrameworkInfo.GetOrCreateAsync).ToArray();
             await Task.WhenAll(allFrmkInfoTasks);
             var allFrmkInfo = allFrmkInfoTasks.Select(t => t.Result).ToArray();
 
@@ -219,6 +281,29 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return result;
         }
 
+        [CanBeNull]
+        public string GetAssemblyPath([NotNull] AssemblyInfo assemblyInfo)
+        {
+            if (assemblyInfo == null)
+                throw new ArgumentNullException("assemblyInfo");
+
+            Debug.Assert(assemblyInfo.RelativePath.StartsWith("~\\"), "assemblyInfo.RelativePath.StartsWith(\"~\\\")");
+
+            var directory = PathHelper.GetPolyDirectoryInfoFor(this.FrameworkName);
+            var pathParts = assemblyInfo.RelativePath
+                .Split(new[] { '\\' }, StringSplitOptions.RemoveEmptyEntries);
+
+            Debug.Assert(pathParts.Length > 1, "pathParts.Length > 1");
+
+            for (int it = 1; it < pathParts.Length - 1; it++)
+                if (directory != null)
+                    directory = directory.GetDirectory(pathParts[it]);
+
+            var file = directory == null ? null : directory.GetFile(pathParts[pathParts.Length - 1]);
+
+            return file == null ? null : file.FullName;
+        }
+
         [NotNull]
         private static Tuple<string[], string[]> GetFrameworkLibraries(
             DirectoryChain directory,
@@ -289,47 +374,6 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 .ToArray();
 
             return Tuple.Create(nonMissing, missing);
-        }
-
-        private static DirectoryChain GetPolyDirectoryInfoFor(FrameworkName frameworkName)
-        {
-            var versionNum = "v" + frameworkName.Version;
-
-            var basePath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                @"Reference Assemblies\Microsoft\Framework",
-                frameworkName.Identifier,
-                versionNum);
-
-            var basePathOld = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                @"Reference Assemblies\Microsoft\Framework",
-                versionNum);
-
-            var hasProfile = !string.IsNullOrEmpty(frameworkName.Profile);
-
-            var profilePath = !hasProfile
-                ? null
-                : Path.Combine(
-                    basePath,
-                    @"Profile",
-                    frameworkName.Profile);
-
-            var profilePathOld = !hasProfile
-                ? null
-                : Path.Combine(
-                    basePathOld,
-                    @"Profile",
-                    frameworkName.Profile);
-
-            // listing all assemblies from base directories
-            var dir = new DirectoryChain(
-                new[] { basePath, basePathOld, profilePath, profilePathOld }
-                    .Where(x => !string.IsNullOrEmpty(x))
-                    .Where(Directory.Exists)
-                    .ToArray());
-
-            return dir;
         }
 
         /// <summary>

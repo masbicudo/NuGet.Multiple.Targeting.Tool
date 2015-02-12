@@ -96,6 +96,31 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         }
 
         /// <summary>
+        /// Gets all file that match the search pattern in the current directory chain.
+        /// </summary>
+        /// <param name="fileName">
+        /// The file name.
+        /// </param>
+        /// <returns>
+        /// An array containing the files in the chain.
+        /// </returns>
+        [CanBeNull]
+        public FileInfo GetFile([NotNull] string fileName)
+        {
+            if (fileName == null)
+                throw new ArgumentNullException("fileName");
+
+            var result = this.directoryChain
+                .SelectMany(x => x.GetFiles(fileName))
+                .GroupBy(x => x.Name.ToLowerInvariant())
+                .Select(x => x.Last())
+                .OrderBy(x => x.Name)
+                .SingleOrDefault();
+
+            return result;
+        }
+
+        /// <summary>
         /// Gets all subdirectory chains in the current directory chain.
         /// </summary>
         /// <returns>An array containing all subdirectory chains in this chain.</returns>

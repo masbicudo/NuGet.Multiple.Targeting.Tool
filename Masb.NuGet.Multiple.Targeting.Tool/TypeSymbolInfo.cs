@@ -1,4 +1,3 @@
-using System.Linq;
 using Microsoft.CodeAnalysis;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
@@ -20,33 +19,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         public static TypeSymbolInfo Create(INamedTypeSymbol arg)
         {
-            return new TypeSymbolInfo(GetTypeName(arg), GetVariance(arg));
-        }
-
-        private static string GetTypeName(INamespaceOrTypeSymbol symbol)
-        {
-            var ns = symbol.ContainingNamespace;
-            return ns == null || !ns.IsGlobalNamespace
-                ? GetTypeName((INamespaceOrTypeSymbol)symbol.ContainingSymbol) + "." + GetSymbolName(symbol)
-                : GetSymbolName(symbol);
-        }
-
-        private static string GetSymbolName(INamespaceOrTypeSymbol symbol)
-        {
-            var type = symbol as INamedTypeSymbol;
-            if (type != null && type.Arity > 0)
-                return type.Name + "`" + type.Arity;
-            return symbol.Name;
-        }
-
-        private static string[] GetVariance(INamedTypeSymbol typeSymbol)
-        {
-            if (typeSymbol.TypeParameters.Any(tp => tp.Variance != VarianceKind.None))
-                return typeSymbol.TypeParameters
-                    .Select(tp => tp.Variance.ToString().ToLowerInvariant())
-                    .ToArray();
-
-            return null;
+            return new TypeSymbolInfo(arg.GetTypeFullName(), arg.GetVariance());
         }
     }
 }

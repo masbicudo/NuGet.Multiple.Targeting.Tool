@@ -6,13 +6,13 @@ using JetBrains.Annotations;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
 {
-    public class FrameworksGraph
+    public class HierarchyGraph
     {
-        public static ImmutableArray<FrameworksGraph> Create(IEnumerable<FrameworkInfo> frameworkInfos)
+        public static ImmutableArray<HierarchyGraph> Create(IEnumerable<FrameworkInfo> frameworkInfos)
         {
             var array = frameworkInfos.Select(x => new S { item = x }).ToArray();
             FrameworksGraphs(array, 0);
-            return array.Select(x => x.graph).Where(x => x != null).ToImmutableArray();
+            return array.Select(x => x.hierarchyGraph).Where(x => x != null).ToImmutableArray();
         }
 
         private static void FrameworksGraphs(S[] sets, int level)
@@ -32,7 +32,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         if (it != it2)
                         {
                             var child = sets[it2];
-                            var item = child.item ?? (child.graph == null ? null : child.graph.FrameworkInfo);
+                            var item = child.item ?? (child.hierarchyGraph == null ? null : child.hierarchyGraph.FrameworkInfo);
                             if (item != null && master.item.IsSupersetOf(item) == true)
                             {
                                 ConsoleHelper.Write("*", ConsoleColor.Gray);
@@ -48,15 +48,15 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     FrameworksGraphs(subsets, level + 1);
                     sets[it] = new S
                         {
-                            graph = new FrameworksGraph(
+                            hierarchyGraph = new HierarchyGraph(
                                 master.item,
-                                subsets.Select(x => x.graph).Where(x => x != null).ToImmutableArray())
+                                subsets.Select(x => x.hierarchyGraph).Where(x => x != null).ToImmutableArray())
                         };
                 }
             }
         }
 
-        internal FrameworksGraph([CanBeNull] FrameworkInfo frameworkInfo, ImmutableArray<FrameworksGraph> subsets)
+        internal HierarchyGraph([CanBeNull] FrameworkInfo frameworkInfo, ImmutableArray<HierarchyGraph> subsets)
         {
             this.FrameworkInfo = frameworkInfo;
             this.Subsets = subsets;
@@ -65,7 +65,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         [CanBeNull]
         public FrameworkInfo FrameworkInfo { get; private set; }
 
-        public ImmutableArray<FrameworksGraph> Subsets { get; private set; }
+        public ImmutableArray<HierarchyGraph> Subsets { get; private set; }
 
         public override string ToString()
         {
@@ -75,60 +75,60 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         struct S
         {
             public FrameworkInfo item;
-            public FrameworksGraph graph;
+            public HierarchyGraph hierarchyGraph;
 
             public static bool HasValue(S s)
             {
-                return !(s.item == null && s.graph == null);
+                return !(s.item == null && s.hierarchyGraph == null);
             }
         }
 
         public TNode Visit<TNode>(
-            Func<ImmutableStack<FrameworksGraph>, IEnumerable<TNode>, TNode> func)
+            Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, TNode> func)
         {
-            return this.Visit(this, ImmutableStack<FrameworksGraph>.Empty, func);
+            return this.Visit(this, ImmutableStack<HierarchyGraph>.Empty, func);
         }
 
         public TNode Visit<TNode, TContext>(
             TContext context,
-            Func<ImmutableStack<FrameworksGraph>, IEnumerable<TNode>, TContext, TNode> func)
+            Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, TContext, TNode> func)
         {
-            return this.Visit(context, this, ImmutableStack<FrameworksGraph>.Empty, func);
+            return this.Visit(context, this, ImmutableStack<HierarchyGraph>.Empty, func);
         }
 
-        public void Visit(Action<ImmutableStack<FrameworksGraph>> action)
+        public void Visit(Action<ImmutableStack<HierarchyGraph>> action)
         {
-            this.Visit(this, ImmutableStack<FrameworksGraph>.Empty, action);
+            this.Visit(this, ImmutableStack<HierarchyGraph>.Empty, action);
         }
 
         private TNode Visit<TNode>(
-            FrameworksGraph graph,
-            ImmutableStack<FrameworksGraph> stack,
-            Func<ImmutableStack<FrameworksGraph>, IEnumerable<TNode>, TNode> func)
+            HierarchyGraph hierarchyGraph,
+            ImmutableStack<HierarchyGraph> stack,
+            Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, TNode> func)
         {
-            stack = stack.Push(graph);
-            var newChildren = graph.Subsets.Select(x => this.Visit(x, stack, func));
+            stack = stack.Push(hierarchyGraph);
+            var newChildren = hierarchyGraph.Subsets.Select(x => this.Visit(x, stack, func));
             var result = func(stack, newChildren);
             return result;
         }
 
         private TNode Visit<TNode, TContext>(
             TContext context,
-            FrameworksGraph graph,
-            ImmutableStack<FrameworksGraph> stack,
-            Func<ImmutableStack<FrameworksGraph>, IEnumerable<TNode>, TContext, TNode> func)
+            HierarchyGraph hierarchyGraph,
+            ImmutableStack<HierarchyGraph> stack,
+            Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, TContext, TNode> func)
         {
-            stack = stack.Push(graph);
-            var newChildren = graph.Subsets.Select(x => this.Visit(context, x, stack, func));
+            stack = stack.Push(hierarchyGraph);
+            var newChildren = hierarchyGraph.Subsets.Select(x => this.Visit(context, x, stack, func));
             var result = func(stack, newChildren, context);
             return result;
         }
 
-        private void Visit(FrameworksGraph graph, ImmutableStack<FrameworksGraph> stack, Action<ImmutableStack<FrameworksGraph>> action)
+        private void Visit(HierarchyGraph hierarchyGraph, ImmutableStack<HierarchyGraph> stack, Action<ImmutableStack<HierarchyGraph>> action)
         {
-            stack = stack.Push(graph);
+            stack = stack.Push(hierarchyGraph);
             action(stack);
-            foreach (var each in graph.Subsets)
+            foreach (var each in hierarchyGraph.Subsets)
                 this.Visit(each, stack, action);
         }
     }
