@@ -67,8 +67,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 if (typeInfo.Type.TypeKind == TypeKind.Error)
                 {
                     // TODO: see if the type is in the ignoreList
-                    if (!isInIgnoreList)
-                        return false;
+                    //if (!isInIgnoreList)
+                    //    return false;
                 }
             }
 
@@ -82,20 +82,20 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         public Compilation Compilation { get; set; }
 
-        public SupportGraph[] GetSupportGraph(HierarchyGraph hierarchyGraph)
+        public async Task<SupportGraph[]> GetSupportGraphAsync(HierarchyGraph hierarchyGraph)
         {
-            var supportedFrameworks = hierarchyGraph.Visit<SupportGraph[]>(this.SupportedFrameworkNodes);
+            var supportedFrameworks = await hierarchyGraph.VisitAsync<SupportGraph[]>(this.SupportedFrameworkNodesAsync);
             return supportedFrameworks;
         }
 
-        private SupportGraph[] SupportedFrameworkNodes(ImmutableStack<HierarchyGraph> path, IEnumerable<SupportGraph[]> children)
+        private async Task<SupportGraph[]> SupportedFrameworkNodesAsync(ImmutableStack<HierarchyGraph> path, IEnumerable<SupportGraph[]> children)
         {
             var childrenArray = children.SelectMany(x => x).ToImmutableArray();
 
             if (childrenArray.Length != 1)
             {
                 var node = path.Peek();
-                var isSupported = node.FrameworkInfo != null && this.SupportedBy(node.FrameworkInfo);
+                var isSupported = node.FrameworkInfo != null && (await this.SupportedBy(node.FrameworkInfo));
                 if (isSupported)
                     return new[] { new SupportGraph(node, childrenArray) };
             }

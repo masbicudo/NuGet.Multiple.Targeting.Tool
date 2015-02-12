@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Threading.Tasks;
 using JetBrains.Annotations;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
@@ -83,6 +84,12 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             }
         }
 
+        public async Task<TNode> VisitAsync<TNode>(
+            Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, Task<TNode>> func)
+        {
+            return await this.VisitAsync(this, ImmutableStack<HierarchyGraph>.Empty, func);
+        }
+
         public TNode Visit<TNode>(
             Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, TNode> func)
         {
@@ -96,9 +103,34 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return this.Visit(context, this, ImmutableStack<HierarchyGraph>.Empty, func);
         }
 
+        public async Task<TNode> VisitAsync<TNode, TContext>(
+            TContext context,
+            Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, TContext, Task<TNode>> func)
+        {
+            return await this.VisitAsync(context, this, ImmutableStack<HierarchyGraph>.Empty, func);
+        }
+
         public void Visit(Action<ImmutableStack<HierarchyGraph>> action)
         {
             this.Visit(this, ImmutableStack<HierarchyGraph>.Empty, action);
+        }
+
+        public async Task VisitAsync(Func<ImmutableStack<HierarchyGraph>, Task> action)
+        {
+            await this.VisitAsync(this, ImmutableStack<HierarchyGraph>.Empty, action);
+        }
+
+        private async Task<TNode> VisitAsync<TNode>(
+            HierarchyGraph hierarchyGraph,
+            ImmutableStack<HierarchyGraph> stack,
+            Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, Task<TNode>> func)
+        {
+            stack = stack.Push(hierarchyGraph);
+            var manyTasks = hierarchyGraph.Subsets.Select(x => this.VisitAsync(x, stack, func)).ToArray();
+            await Task.WhenAll(manyTasks);
+            var newChildren = manyTasks.Select(x => x.Result);
+            var result = await func(stack, newChildren);
+            return result;
         }
 
         private TNode Visit<TNode>(
@@ -124,12 +156,40 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return result;
         }
 
-        private void Visit(HierarchyGraph hierarchyGraph, ImmutableStack<HierarchyGraph> stack, Action<ImmutableStack<HierarchyGraph>> action)
+        private async Task<TNode> VisitAsync<TNode, TContext>(
+            TContext context,
+            HierarchyGraph hierarchyGraph,
+            ImmutableStack<HierarchyGraph> stack,
+            Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, TContext, Task<TNode>> func)
+        {
+            stack = stack.Push(hierarchyGraph);
+            var manyTasks = hierarchyGraph.Subsets.Select(x => this.VisitAsync(context, x, stack, func)).ToArray();
+            await Task.WhenAll(manyTasks);
+            var newChildren = manyTasks.Select(x => x.Result);
+            var result = await func(stack, newChildren, context);
+            return result;
+        }
+
+        private void Visit(
+            HierarchyGraph hierarchyGraph,
+            ImmutableStack<HierarchyGraph> stack,
+            Action<ImmutableStack<HierarchyGraph>> action)
         {
             stack = stack.Push(hierarchyGraph);
             action(stack);
             foreach (var each in hierarchyGraph.Subsets)
                 this.Visit(each, stack, action);
+        }
+
+        private async Task VisitAsync(
+            HierarchyGraph hierarchyGraph,
+            ImmutableStack<HierarchyGraph> stack,
+            Func<ImmutableStack<HierarchyGraph>, Task> action)
+        {
+            stack = stack.Push(hierarchyGraph);
+            await action(stack);
+            foreach (var each in hierarchyGraph.Subsets)
+                await this.VisitAsync(each, stack, action);
         }
     }
 }

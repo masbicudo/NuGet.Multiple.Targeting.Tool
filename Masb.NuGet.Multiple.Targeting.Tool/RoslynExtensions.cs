@@ -61,14 +61,14 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return null;
         }
 
-        public static async Task<Compilation> GetCompilationWithReferencesAsync(this Project project)
+        public static async Task<Project> GetProjectWithReferencesAsync(this Project project)
         {
             var frameworkName = project.GetFrameworkName();
-            var compilation = await project.GetCompilationWithReferencesAsync(frameworkName);
+            var compilation = await project.GetProjectWithReferencesAsync(frameworkName);
             return compilation;
         }
 
-        public static async Task<Compilation> GetCompilationWithReferencesAsync(
+        public static async Task<Project> GetProjectWithReferencesAsync(
             [NotNull] this Project project,
             [NotNull] FrameworkName frameworkName)
         {
@@ -94,7 +94,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 .Select(x => x.Attribute("Include").Value)
                 .Concat(new[] { "mscorlib" })
                 .Distinct(StringComparer.InvariantCultureIgnoreCase)
-                .Select(x => String.Format("~\\{0}.dll", x))
+                .Select(x => string.Format("~\\{0}.dll", x))
                 .ToArray();
 
             var includes = includesRelPaths
@@ -105,8 +105,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
             var project2 = project.AddMetadataReferences(includes);
 
-            var compilation = await project2.GetCompilationAsync();
-            return compilation;
+            return project2;
         }
 
         /// <summary>

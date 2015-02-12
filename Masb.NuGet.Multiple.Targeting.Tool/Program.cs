@@ -76,7 +76,13 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 INamedTypeSymbol[] usedTypes;
                 foreach (var project in sortedProject)
                 {
-                    var compilation = await project.GetCompilationWithReferencesAsync();
+                    var project2 = project;
+
+                    // if we skip this line the project comes without references,
+                    // causing thousands of reference errors, when `GetDiagnostics` is called below
+                    project2 = await project2.GetProjectWithReferencesAsync();
+
+                    var compilation = await project2.GetCompilationAsync();
                     var diag = compilation.GetDiagnostics();
                     if (diag.Length == 0)
                     {
@@ -100,7 +106,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                             };
 
                         // determining what frameworks support this set of types
-                        var supportedFrameworks = frameworkRequirements.GetSupportGraph(hierarchyGraph);
+                        var supportedFrameworks = await frameworkRequirements.GetSupportGraphAsync(hierarchyGraph);
 
                         Debugger.Break();
                     }
