@@ -126,9 +126,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, Task<TNode>> func)
         {
             stack = stack.Push(hierarchyGraph);
-            var manyTasks = hierarchyGraph.Subsets.Select(x => this.VisitAsync(x, stack, func)).ToArray();
-            await Task.WhenAll(manyTasks);
-            var newChildren = manyTasks.Select(x => x.Result);
+            var newChildren = await Task.WhenAll(
+                hierarchyGraph.Subsets.Select(x => this.VisitAsync(x, stack, func)));
             var result = await func(stack, newChildren);
             return result;
         }
@@ -163,9 +162,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             Func<ImmutableStack<HierarchyGraph>, IEnumerable<TNode>, TContext, Task<TNode>> func)
         {
             stack = stack.Push(hierarchyGraph);
-            var manyTasks = hierarchyGraph.Subsets.Select(x => this.VisitAsync(context, x, stack, func)).ToArray();
-            await Task.WhenAll(manyTasks);
-            var newChildren = manyTasks.Select(x => x.Result);
+            var newChildren = await Task.WhenAll(
+                hierarchyGraph.Subsets.Select(x => this.VisitAsync(context, x, stack, func)));
             var result = await func(stack, newChildren, context);
             return result;
         }

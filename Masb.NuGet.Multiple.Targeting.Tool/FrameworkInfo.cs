@@ -171,12 +171,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         public static async Task<FrameworkInfo[]> GetFrameworkInfos()
         {
-            var allFrameworks = FrameworkInfo.GetFrameworkNames();
-
-            var allFrmkInfoTasks = allFrameworks.Select(FrameworkInfo.GetOrCreateAsync).ToArray();
-            await Task.WhenAll(allFrmkInfoTasks);
-            var allFrmkInfo = allFrmkInfoTasks.Select(t => t.Result).ToArray();
-
+            var allFrameworks = GetFrameworkNames();
+            var allFrmkInfo = await Task.WhenAll(allFrameworks.Select(GetOrCreateAsync));
             return allFrmkInfo;
         }
 
