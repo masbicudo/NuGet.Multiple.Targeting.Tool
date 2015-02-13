@@ -126,7 +126,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// <param name="frameworkInfo">New target framework.</param>
         /// <param name="relativeReferences">Framework references that need to be added.</param>
         /// <returns>A new compilation targeting the passed framework.</returns>
-        public static Compilation RecompileWithReferences(
+        public static async Task<Compilation> RecompileWithReferencesAsync(
             [NotNull] this Compilation compilation,
             [NotNull] FrameworkInfo frameworkInfo,
             [NotNull] IEnumerable<string> relativeReferences)
@@ -156,7 +156,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 var relativePath = eachFrmkRef.Display;
                 if (PathHelper.TryGetFrameworkRelativePath(ref relativePath))
                 {
-                    var newAssembly = frameworkInfo.GetAssemblyInfoByRelativePath(relativePath);
+                    var newAssembly = await frameworkInfo.GetAssemblyInfoByRelativePathAsync(relativePath);
                     if (newAssembly != null)
                     {
                         var newAssemblyPath = frameworkInfo.GetAssemblyPath(newAssembly);
@@ -176,11 +176,13 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             compilation = compilation.RemoveReferences(refsToRemove);
 
             // creating the new inclusion list
-            var includes = includesRelPaths
+            var includesTasks = includesRelPaths
                 .OrderBy(x => x)
-                .Select(frameworkInfo.GetAssemblyInfoByRelativePath)
-                .Select(frameworkInfo.GetAssemblyPath)
-                .Select(x => MetadataReference.CreateFromFile(x))
+                .Select(frameworkInfo.GetAssemblyInfoByRelativePathAsync)
+                .ThenSelect(frameworkInfo.GetAssemblyPath)
+                .ThenSelect(x => MetadataReference.CreateFromFile(x));
+
+            var includes = (await Task.WhenAll(includesTasks))
                 .OfType<MetadataReference>()
                 .ToArray();
 

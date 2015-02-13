@@ -29,7 +29,7 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <DefineConstants>TRACE;JETBRAINS_ANNOTATIONS</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -114,13 +114,19 @@
     <Compile Include="Disposer.cs" />
     <Compile Include="EnumerableExtensions.cs" />
     <Compile Include="FrameworkInfo.cs" />
+    <Compile Include="FrameworkInfoBuilder.cs" />
     <Compile Include="FrameworkRequirements.cs" />
     <Compile Include="HierarchyGraph.cs" />
     <Compile Include="FrameworkNameSet.cs" />
+    <Compile Include="IFrameworkInfoCache.cs" />
+    <Compile Include="InMemoryCache.cs" />
+    <Compile Include="MiniIoC.cs" />
     <Compile Include="IUndeterminedSet.cs" />
     <Compile Include="IntersectionSet.cs" />
     <Compile Include="JetBrains.Annotations\JetBrains.Annotations.cs" />
     <Compile Include="DirectoryChain.cs" />
+    <Compile Include="MiniIoCDefaults.cs" />
+    <Compile Include="MyIoC.cs" />
     <Compile Include="PathHelper.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

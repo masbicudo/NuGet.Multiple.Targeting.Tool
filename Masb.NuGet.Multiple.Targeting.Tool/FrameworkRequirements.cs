@@ -49,7 +49,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             // TODO: Set debug symbols according to the used framework: net40; portable; sl50; etc.
             // TODO: This is needed because the user might already be using these symbols
             // TODO: to compensate incompatibilities between frameworks.
-            var recompilation = this.Compilation.RecompileWithReferences(frameworkInfo, neededAssemblies);
+            var recompilation = await this.Compilation.RecompileWithReferencesAsync(frameworkInfo, neededAssemblies);
             var diag = recompilation.GetDiagnostics();
 
             foreach (var d in diag)

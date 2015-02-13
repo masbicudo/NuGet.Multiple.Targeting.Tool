@@ -7,7 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Xml.Serialization;
@@ -17,7 +16,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 {
     public class FrameworkInfo : IEquatable<FrameworkInfo>
     {
-        internal FrameworkInfo(
+        private readonly IFrameworkInfoCache cache;
+
+        public FrameworkInfo(
             [NotNull] FrameworkName frameworkName,
             [NotNull] IEnumerable<AssemblyInfo> assemblyInfos,
             [CanBeNull] IEnumerable<IUndeterminedSet<FrameworkName>> supportedFrameworks,
@@ -67,14 +68,14 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         private Dictionary<string, AssemblyInfo> assembliesByRelPath;
 
-        [CanBeNull]
-        public AssemblyInfo GetAssemblyInfoByRelativePath([NotNull] string relativePath)
+        [NotNull]
+        public async Task<AssemblyInfo> GetAssemblyInfoByRelativePathAsync([NotNull] string relativePath)
         {
             if (relativePath == null)
                 throw new ArgumentNullException("relativePath");
 
             if (!relativePath.StartsWith("~\\"))
-                throw new ArgumentException("Relative paths must start with \"~\\\"", "relativePath");
+                throw new ArgumentException(@"Relative paths must start with ""~\""", "relativePath");
 
             if (this.assembliesByRelPath == null)
                 using (await this.lockerGetAssemblyInfoByRelativePath)
@@ -87,11 +88,6 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             this.assembliesByRelPath.TryGetValue(relativePath, out value);
             return value;
         }
-
-        private static readonly AsyncLock cacheLocker = new AsyncLock();
-
-        private static ImmutableDictionary<FrameworkName, FrameworkInfo> frmkInfoCache =
-            ImmutableDictionary<FrameworkName, FrameworkInfo>.Empty;
 
         /// <summary>
         /// Gets or creates a FrameworkInfo given a FrameworkName asynchronously,
@@ -115,10 +111,12 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// <returns>A Task that returns a FrameworkInfo object when all information is ready.</returns>
         public static async Task<FrameworkInfo> CreateAsync(FrameworkName frameworkName, bool useCache)
         {
+            IFrameworkInfoCache cache = null;
             if (useCache)
             {
-                FrameworkInfo frmkInfo;
-                if (frmkInfoCache.TryGetValue(frameworkName, out frmkInfo))
+                cache = await MyIoC.GetAsync<IFrameworkInfoCache>();
+                var frmkInfo = await cache.GetValueAsync(frameworkName);
+                if (frmkInfo != null)
                     return frmkInfo;
             }
 
@@ -147,12 +145,12 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 }
             }
 
-            var result = new FrameworkInfo(frameworkName, assemblyInfos, supportedFrameworkInfos, dlls.Item2);
+            var builder = await MyIoC.GetAsync<FrameworkInfoBuilder>();
+            var result = builder.Create(frameworkName, assemblyInfos, supportedFrameworkInfos, dlls.Item2);
 
-            if (useCache)
+            if (cache != null)
             {
-                using (await cacheLocker)
-                    frmkInfoCache = frmkInfoCache.SetItem(frameworkName, result);
+                await cache.SetItemAsync(frameworkName, result);
             }
 
             return result;
@@ -176,9 +174,13 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return allFrmkInfo;
         }
 
-        public static IEnumerable<FrameworkName> GetFrameworkNames()
+        public static IEnumerable<FrameworkName> GetFrameworkNames(
+            [CanBeNull] string baseFrameworksPath = null,
+            [CanBeNull] string identifier = null,
+            [CanBeNull] string version = null)
         {
-            return GetFrameworkNames(null, null)
+            var dirInfo = baseFrameworksPath == null ? null : new DirectoryInfo(baseFrameworksPath);
+            return GetFrameworkNamesCore(dirInfo, null, null)
                 .Distinct()
                 .OrderBy(x => x.Identifier)
                 .ThenBy(x => x.Version)
@@ -186,20 +188,10 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 .ToImmutableArray();
         }
 
-        public static IEnumerable<FrameworkName> GetFrameworkNames(string path)
-        {
-            return GetFrameworkNames(new DirectoryInfo(path), null)
-                .Distinct()
-                .OrderBy(x => x.Identifier)
-                .ThenBy(x => x.Version)
-                .ThenBy(x => x.Profile)
-                .ToImmutableArray();
-        }
-
-        private static IEnumerable<FrameworkName> GetFrameworkNames(
+        private static IEnumerable<FrameworkName> GetFrameworkNamesCore(
             [CanBeNull] DirectoryInfo baseDirInfo,
             [CanBeNull] string identifier,
-            [CanBeNull] string version = null)
+            [CanBeNull] string version)
         {
             if (baseDirInfo == null)
             {
@@ -207,7 +199,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
                     @"Reference Assemblies\Microsoft\Framework");
 
-                return GetFrameworkNames(new DirectoryInfo(basePath), null);
+                return GetFrameworkNamesCore(new DirectoryInfo(basePath), null, null);
             }
 
             IEnumerable<FrameworkName> result = Enumerable.Empty<FrameworkName>();
@@ -220,7 +212,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     if (match.Success)
                     {
                         result = result.Concat(
-                            GetFrameworkNames(
+                            GetFrameworkNamesCore(
                                 subDirInfo,
                                 ".NETFramework",
                                 match.Groups[1].Value));
@@ -228,9 +220,10 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     else
                     {
                         result = result.Concat(
-                            GetFrameworkNames(
+                            GetFrameworkNamesCore(
                                 subDirInfo,
-                                subDirInfo.Name));
+                                subDirInfo.Name,
+                                null));
                     }
                 }
             }
@@ -242,7 +235,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     if (match.Success)
                     {
                         result = result.Concat(
-                            GetFrameworkNames(
+                            GetFrameworkNamesCore(
                                 subDirInfo,
                                 identifier,
                                 match.Groups[1].Value));
@@ -270,7 +263,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 {
                     foreach (var profileDirInfo in dirProfile.GetDirectories())
                         if (profileDirInfo.GetDirectories().Any(d => d.Name == "RedistList"))
-                            result = result.Concat(new[] { new FrameworkName(identifier, new Version(version), profileDirInfo.Name) });
+                            result = result.Concat(
+                                new[] { new FrameworkName(identifier, new Version(version), profileDirInfo.Name) });
                 }
             }
 

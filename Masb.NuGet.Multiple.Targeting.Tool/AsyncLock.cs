@@ -7,6 +7,9 @@ using JetBrains.Annotations;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
 {
+    /// <summary>
+    /// Locking mechanism that xpto.
+    /// </summary>
     public sealed class AsyncLock
     {
         private readonly SemaphoreSlim syncLock = new SemaphoreSlim(1);
@@ -20,13 +23,13 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         [UsedImplicitly]
         public TaskAwaiter<IDisposable> GetAwaiter()
         {
-            Thread.MemoryBarrier();
             return this.UseLock().GetAwaiter();
         }
 
         private async Task<IDisposable> UseLock()
         {
             await this.syncLock.WaitAsync();
+            Thread.MemoryBarrier();
             return new Disposer(this.Release);
         }
 
