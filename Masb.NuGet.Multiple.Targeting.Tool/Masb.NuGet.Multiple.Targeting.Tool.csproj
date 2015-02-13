@@ -109,7 +109,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="AsyncLock.cs" />
     <Compile Include="ConsoleHelper.cs" />
+    <Compile Include="Disposer.cs" />
     <Compile Include="EnumerableExtensions.cs" />
     <Compile Include="FrameworkInfo.cs" />
     <Compile Include="FrameworkRequirements.cs" />

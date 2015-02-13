@@ -63,7 +63,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// </summary>
         public ImmutableArray<string> MissingAssemblies { get; private set; }
 
-        private object locker = new object();
+        private readonly AsyncLock lockerGetAssemblyInfoByRelativePath = new AsyncLock();
 
         private Dictionary<string, AssemblyInfo> assembliesByRelPath;
 
@@ -77,7 +77,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 throw new ArgumentException("Relative paths must start with \"~\\\"", "relativePath");
 
             if (this.assembliesByRelPath == null)
-                lock (this.locker)
+                using (await this.lockerGetAssemblyInfoByRelativePath)
                     this.assembliesByRelPath = this.assembliesByRelPath
                                                ?? this.AssemblyInfos.ToDictionary(
                                                    a => a.RelativePath,
@@ -88,7 +88,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return value;
         }
 
-        private static readonly object cacheLocker = new object();
+        private static readonly AsyncLock cacheLocker = new AsyncLock();
 
         private static ImmutableDictionary<FrameworkName, FrameworkInfo> frmkInfoCache =
             ImmutableDictionary<FrameworkName, FrameworkInfo>.Empty;
@@ -151,7 +151,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
             if (useCache)
             {
-                lock (cacheLocker)
+                using (await cacheLocker)
                     frmkInfoCache = frmkInfoCache.SetItem(frameworkName, result);
             }
 
