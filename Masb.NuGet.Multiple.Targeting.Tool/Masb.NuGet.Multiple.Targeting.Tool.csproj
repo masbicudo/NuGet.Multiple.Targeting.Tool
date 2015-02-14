@@ -108,18 +108,26 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AppDataBlobStorageManager.cs" />
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="AsyncLock.cs" />
+    <Compile Include="BlobLocation.cs" />
     <Compile Include="ConsoleHelper.cs" />
     <Compile Include="Disposer.cs" />
     <Compile Include="EnumerableExtensions.cs" />
+    <Compile Include="FileSystemBlobStorageManager.cs" />
     <Compile Include="FrameworkInfo.cs" />
     <Compile Include="FrameworkInfoBuilder.cs" />
     <Compile Include="FrameworkRequirements.cs" />
     <Compile Include="HierarchyGraph.cs" />
     <Compile Include="FrameworkNameSet.cs" />
+    <Compile Include="IBlobStorageManager.cs" />
     <Compile Include="IFrameworkInfoCache.cs" />
     <Compile Include="InMemoryCache.cs" />
+    <Compile Include="Json\FrameworkNameConverter.cs" />
+    <Compile Include="Json\AssemblyInfoJson.cs" />
+    <Compile Include="Json\FrameworkInfoJson.cs" />
+    <Compile Include="Json\TypeSymbolInfoJson.cs" />
     <Compile Include="MiniIoC.cs" />
     <Compile Include="IUndeterminedSet.cs" />
     <Compile Include="IntersectionSet.cs" />
@@ -132,6 +140,7 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RoslynExtensions.cs" />
     <Compile Include="FrameworkFilter.cs" />
+    <Compile Include="StorageFrameworkInfoCache.cs" />
     <Compile Include="SupportNode.cs" />
     <Compile Include="TypeSymbolInfo.cs" />
     <Compile Include="UsedTypeLocator.cs" />

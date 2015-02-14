@@ -11,7 +11,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         public string[] Variance { get; private set; }
 
-        private TypeSymbolInfo(string typeName, string[] variance)
+        internal TypeSymbolInfo(string typeName, string[] variance)
         {
             this.TypeName = typeName;
             this.Variance = variance;

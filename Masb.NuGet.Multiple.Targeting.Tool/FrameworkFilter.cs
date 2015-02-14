@@ -103,8 +103,36 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 {
                     var stringBuilder = new StringBuilder();
                     stringBuilder.AppendFormat("{0},Version=v{1}+", this.Identifier, this.MinimumVersion);
+
                     if (!string.IsNullOrWhiteSpace(this.Profile))
                         stringBuilder.AppendFormat(",Profile={0}", this.Profile);
+
+                    if (!string.IsNullOrWhiteSpace(this.DisplayName))
+                        stringBuilder.AppendFormat(",DisplayName={0}", this.DisplayName);
+
+                    if (!string.IsNullOrWhiteSpace(this.Family))
+                        stringBuilder.AppendFormat(",Family={0}", this.Family);
+
+                    if (!string.IsNullOrWhiteSpace(this.MinimumVersionDisplayName))
+                        stringBuilder.AppendFormat(",MinimumVersionDisplayName={0}", this.MinimumVersionDisplayName);
+
+                    if (this.MaximumVisualStudioVersion != null)
+                        stringBuilder.AppendFormat(",MaximumVisualStudioVersion={0}", this.MaximumVisualStudioVersion);
+
+                    if (this.MinimumVisualStudioVersion != null)
+                        stringBuilder.AppendFormat(",MinimumVisualStudioVersion={0}", this.MinimumVisualStudioVersion);
+
+                    if (this.PlatformArchitectures != null)
+                        stringBuilder.AppendFormat(",PlatformArchitectures={0}", string.Join("|", this.PlatformArchitectures));
+
+                    if (this.Platform != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(this.Platform.Identifier))
+                            stringBuilder.AppendFormat(",PlatformIdentifier={0}", this.Platform.Identifier);
+                        if (this.Platform.MinimumVersion != null)
+                            stringBuilder.AppendFormat(",PlatformMinimumVersion={0}", this.Platform.MinimumVersion);
+                    }
+
                     this.fullName = stringBuilder.ToString();
                 }
 
@@ -254,6 +282,76 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                    && CompareMinVersions(frameworkFilter.MinimumVisualStudioVersion, this.MinimumVisualStudioVersion) >= 0
                    && CompareMaxVersions(frameworkFilter.MaximumVisualStudioVersion, this.MaximumVisualStudioVersion) <= 0
                    && frameworkFilter.PlatformArchitectures.All(x => this.PlatformArchitectures.Contains(x));
+        }
+
+        private static string ReadVer(Dictionary<string, string> dic, string key)
+        {
+            string str;
+            if (dic.TryGetValue(key, out str))
+                if (Regex.IsMatch(str, @"^\d+(?:\.\d+(?:\.\d+(?:\.\d+)?)?)?$"))
+                    return str.Substring(1);
+
+            return null;
+        }
+
+        private static string ReadStr(Dictionary<string, string> dic, string key)
+        {
+            string value;
+            if (dic.TryGetValue(key, out value))
+                return value;
+
+            return null;
+        }
+
+        private static string ReadList(Dictionary<string, string> dic, string key)
+        {
+            string value;
+            if (dic.TryGetValue(key, out value))
+                if (value != null)
+                    return value.Replace("|", ",");
+
+            return null;
+        }
+
+        public static bool TryParse(string str, out FrameworkFilter value)
+        {
+            if (!string.IsNullOrWhiteSpace(str))
+            {
+                var parts = str.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 0)
+                {
+                    var dic = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
+                    foreach (var part in parts.Skip(1))
+                    {
+                        var eq = part.Split(new char[] { '=' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                        if (eq.Length == 2)
+                            dic[eq[0].Trim()] = eq[1].Trim();
+                    }
+
+                    value = new FrameworkFilter(new FrameworkInfo.SupportedFrameworkItem
+                        {
+                            Identifier = parts[0],
+                            MinimumVersion = ReadVer(dic, "MinimumVersion"),
+                            DisplayName = ReadStr(dic, "DisplayName"),
+                            Family = ReadStr(dic, "Family"),
+                            MaximumVisualStudioVersion = ReadStr(dic, "MaximumVisualStudioVersion"),
+                            MinimumVersionDisplayName = ReadStr(dic, "MinimumVersionDisplayName"),
+                            MinimumVisualStudioVersion = ReadStr(dic, "MinimumVisualStudioVersion"),
+                            Profile = ReadStr(dic, "Profile"),
+                            PlatformArchitectures = ReadList(dic, "PlatformArchitectures"),
+                            Platform = new FrameworkInfo.SupportedFrameworkItem.PlatformItem
+                                {
+                                    Identifier = ReadStr(dic, "PlatformIdentifier"),
+                                    MinimumVersion = ReadStr(dic, "PlatformMinimumVersion"),
+                                }
+                        });
+
+                    return true;
+                }
+            }
+
+            value = null;
+            return false;
         }
     }
 }

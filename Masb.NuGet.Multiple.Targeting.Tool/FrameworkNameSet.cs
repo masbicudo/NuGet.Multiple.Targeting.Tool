@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Runtime.Versioning;
+using System.Text.RegularExpressions;
 using JetBrains.Annotations;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
@@ -132,6 +133,23 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         if (set.Version >= subset.Version)
                             return true;
 
+            return false;
+        }
+
+        public override string ToString()
+        {
+            return this.FrameworkName.ToString();
+        }
+
+        public static bool TryParse(string str, out FrameworkNameSet value)
+        {
+            if (Regex.IsMatch(str, @"^[^,]*,Version=v(?:\d+(?:\.\d+(?:\.\d+(?:\.\d+)?)?)?)(?:,Profile=.*)?$"))
+            {
+                value = new FrameworkNameSet(new FrameworkName(str));
+                return true;
+            }
+
+            value = null;
             return false;
         }
     }

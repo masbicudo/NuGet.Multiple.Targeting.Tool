@@ -1,14 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Linq;
+﻿using System.Collections.Immutable;
 using System.Runtime.Versioning;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
 {
-    public class InMemoryCache : IFrameworkInfoCache
+    public class InMemoryFrameworkInfoCache : IFrameworkInfoCache
     {
         private static readonly AsyncLock cacheLocker = new AsyncLock();
 
