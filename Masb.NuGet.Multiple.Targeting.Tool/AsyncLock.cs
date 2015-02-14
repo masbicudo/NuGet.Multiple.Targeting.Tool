@@ -36,7 +36,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         private void Release()
         {
             var release = this.syncLock.Release();
-            Debug.Assert(release == 1, "release == 1");
+            Debug.Assert(release == 0, "release == 0");
             Thread.MemoryBarrier();
         }
     }
