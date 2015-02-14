@@ -33,14 +33,17 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     {
                         var code = await reader.ReadToEndAsync();
 
-                        var ser = JsonSerializer.Create();
-
-                        using (var strReader = new StringReader(code))
-                        using (var jsonReader = new JsonTextReader(strReader))
+                        var settings = new JsonSerializerSettings
                         {
-                            var frmkInfo = ser.Deserialize<FrameworkInfo>(jsonReader);
-                            value = frmkInfo;
-                        }
+                            Formatting = Formatting.Indented,
+                            Converters = new[]
+                            {
+                                new FrameworkNameConverter()
+                            }
+                        };
+
+                        var frmkInfo = await FrameworkInfoJson.ValueAsync(JsonConvert.DeserializeObject<FrameworkInfoJson>(code, settings));
+                        value = frmkInfo;
                     }
 
                     await this.innerCache.SetItemAsync(frameworkName, value);
@@ -65,10 +68,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
                 var str = JsonConvert.SerializeObject(FrameworkInfoJson.From(frmkInfo), settings);
 
-                var frmkInfo2 = await FrameworkInfoJson.ValueAsync(JsonConvert.DeserializeObject<FrameworkInfoJson>(str, settings));
-
                 using (var stream = new MemoryStream())
-                using (var writer = new StreamWriter(stream))
+                using (var writer = new StreamWriter(stream, Encoding.UTF8))
                 {
                     await writer.WriteAsync(str);
                     await writer.FlushAsync();

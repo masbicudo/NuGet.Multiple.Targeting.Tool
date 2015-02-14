@@ -117,7 +117,10 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 cache = await MyIoC.GetAsync<IFrameworkInfoCache>();
                 var frmkInfo = await cache.GetValueAsync(frameworkName);
                 if (frmkInfo != null)
+                {
+                    ConsoleHelper.WriteLine("Framework " + frameworkName, ConsoleColor.DarkYellow, 0);
                     return frmkInfo;
+                }
             }
 
             ConsoleHelper.WriteLine("Framework " + frameworkName, ConsoleColor.Yellow, 0);
