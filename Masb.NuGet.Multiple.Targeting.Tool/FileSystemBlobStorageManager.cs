@@ -217,6 +217,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 catch (FileNotFoundException)
                 {
                 }
+                catch (DirectoryNotFoundException)
+                {
+                }
 
             return false;
         }
@@ -230,6 +233,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     return true;
                 }
                 catch (FileNotFoundException)
+                {
+                }
+                catch (DirectoryNotFoundException)
                 {
                 }
 
@@ -284,6 +290,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     return func();
                 }
                 catch (FileNotFoundException)
+                {
+                }
+                catch (DirectoryNotFoundException)
                 {
                 }
 
