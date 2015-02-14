@@ -16,18 +16,21 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         private static readonly Dictionary<Type, Type> typeMap = new Dictionary<Type, Type>
             {
-                { typeof(IFrameworkInfoCache), typeof(InMemoryCache) }
+                { typeof(IFrameworkInfoCache), typeof(InMemoryFrameworkInfoCache) }
             };
 
-        public override async Task<Expression> GetExpressionAsync(Type type)
+        public override async Task<MiniIoC.Result<Expression>> GetExpressionAsync(Type type)
         {
             if (typeMap.TryGetValue(type, out type))
-                return await MiniIoC.GetExpressionAsync(type, this);
+            {
+                return new MiniIoC.Result<Expression>(
+                    await MiniIoC.GetExpressionAsync(type, this));
+            }
 
-            return null;
+            return new MiniIoC.Result<Expression>();
         }
 
-        public override Task<T> GetDelegateAsync<T>()
+        public override Task<MiniIoC.Result<T>> GetValueAsync<T>()
         {
             throw new NotSupportedException();
         }

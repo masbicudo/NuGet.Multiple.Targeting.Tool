@@ -9,7 +9,7 @@ using JetBrains.Annotations;
 namespace Masb.NuGet.Multiple.Targeting.Tool
 {
     /// <summary>
-    /// Mini Inversion of Control class that can be used internally by other libraries.
+    /// Mini dependency injection container that can be used internally by libraries that wish to support Inversion of Control.
     /// </summary>
     public static class MiniIoC
     {
@@ -28,24 +28,23 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         {
             // First we try to use external providers.
             // This allows the registration of external IoC containers.
-            if (externalProviders != null)
-                foreach (var externalProvider in externalProviders.Where(x => x.CanProvideDelegates))
-                {
-                    var result = await externalProvider.GetDelegateAsync<T>();
-                    if (result != null)
-                        return result;
-                }
-
-            if (defaultProvider != null && defaultProvider.CanProvideDelegates)
+            if (externalProvider != null && externalProvider.CanProvideDelegates)
             {
-                var result = await defaultProvider.GetDelegateAsync<T>();
-                if (result != null)
-                    return result;
+                var result = await externalProvider.GetValueAsync<T>();
+                if (result.IsValid)
+                    return result.Value;
             }
 
             object value;
             if (!funcs.TryGetValue(typeof(T), out value))
             {
+                if (defaultProvider != null && defaultProvider.CanProvideDelegates)
+                {
+                    var result = await defaultProvider.GetValueAsync<T>();
+                    if (result.IsValid)
+                        return result.Value;
+                }
+
                 using (await locker)
                 {
                     if (!funcs.TryGetValue(typeof(T), out value))
@@ -61,33 +60,37 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return func2();
         }
 
-        public static Task<Expression> GetExpressionAsync(Type type)
+        public static async Task<Expression> GetExpressionAsync(Type type)
         {
-            return GetExpressionAsync(type, null);
+            return Transform(await GetExpressionCoreAsync(type, null));
         }
 
         public static async Task<Expression> GetExpressionAsync(Type type, ExternalProvider defaultProvider)
         {
+            return Transform(await GetExpressionCoreAsync(type, defaultProvider));
+        }
+
+        private static async Task<Expression> GetExpressionCoreAsync(Type type, ExternalProvider defaultProvider)
+        {
             // First we try to use external providers.
             // This allows the registration of external IoC containers.
-            if (externalProviders != null)
-                foreach (var externalProvider in externalProviders.Where(x => x.CanProvideExpressions))
-                {
-                    var result = await externalProvider.GetExpressionAsync(type);
-                    if (result != null)
-                        return result;
-                }
-
-            if (defaultProvider != null && defaultProvider.CanProvideExpressions)
+            if (externalProvider != null && externalProvider.CanProvideExpressions)
             {
-                var result = await defaultProvider.GetExpressionAsync(type);
-                if (result != null)
-                    return result;
+                var result = await externalProvider.GetExpressionAsync(type);
+                if (result.IsValid)
+                    return result.Value;
             }
 
             Expression expr;
             if (!exprs.TryGetValue(type, out expr))
             {
+                if (defaultProvider != null && defaultProvider.CanProvideExpressions)
+                {
+                    var result = await defaultProvider.GetExpressionAsync(type);
+                    if (result.IsValid)
+                        return result.Value;
+                }
+
                 var ctors = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
 
                 // creating a default constructor
@@ -103,11 +106,27 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                             "has a parameterless constructor",
                             "nor - has a single constructor"));
 
-                var pars = await Task.WhenAll(ctor.GetParameters().Select(p => GetExpressionAsync(p.ParameterType)));
+                var pars = await Task.WhenAll(ctor.GetParameters().Select(p => GetExpressionCoreAsync(p.ParameterType, defaultProvider)));
                 return Expression.ConvertChecked(Expression.New(ctor, pars), type);
             }
 
             return expr;
+        }
+
+        private static Expression Transform(Expression expr)
+        {
+            return (new ReplacerVisitor()).Visit(expr);
+        }
+
+        private class ReplacerVisitor : ExpressionVisitor
+        {
+            protected override Expression VisitMethodCall(MethodCallExpression node)
+            {
+                if (node.Method.GetCustomAttributes(typeof(GetMethodMarkerAttribute)).Any())
+                    return GetExpressionAsync(node.Method.GetGenericArguments()[0]).Result;
+
+                return base.VisitMethodCall(node);
+            }
         }
 
         #endregion
@@ -119,10 +138,10 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// <summary>
         /// Registers a new expression in this IoC bridge.
         /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="creatorExpression"></param>
-        /// <returns></returns>
-        public static async Task RegisterAsync<T>([NotNull] Expression<Func<T>> creatorExpression)
+        /// <typeparam name="T">Type of the dependency being registered.</typeparam>
+        /// <param name="creatorExpression">Expression used to get or create the dependency object.</param>
+        /// <returns>Task representing the registration action.</returns>
+        public static async Task RegisterAsync<T>([NotNull] Expression<Func<Context, T>> creatorExpression)
             where T : class
         {
             if (creatorExpression == null)
@@ -132,22 +151,30 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 exprs = exprs.Add(typeof(T), creatorExpression.Body);
         }
 
+        [AttributeUsage(AttributeTargets.Method, Inherited = true, AllowMultiple = false)]
+        private sealed class GetMethodMarkerAttribute : Attribute
+        {
+        }
+
+        public class Context
+        {
+            [GetMethodMarkerAttribute]
+            public T Get<T>()
+            {
+                throw new NotImplementedException("This function is only usable in expression trees.");
+            }
+        }
+
         #endregion
 
         #region ExternalProvider
 
-        private static ImmutableList<ExternalProvider> externalProviders;
+        private static ExternalProvider externalProvider;
 
-        public static async Task AddExternalProviders(ExternalProvider externalProvider)
+        public static async Task SetExternalProvider(ExternalProvider provider)
         {
             using (await locker)
-                externalProviders = externalProviders.Add(externalProvider);
-        }
-
-        public static async Task RemoveExternalProviders(ExternalProvider externalProvider)
-        {
-            using (await locker)
-                externalProviders = externalProviders.Remove(externalProvider);
+                externalProvider = provider;
         }
 
         public abstract class ExternalProvider
@@ -162,9 +189,23 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
             public bool CanProvideDelegates { get; private set; }
 
-            public abstract Task<Expression> GetExpressionAsync(Type type);
+            public abstract Task<Result<Expression>> GetExpressionAsync(Type type);
 
-            public abstract Task<T> GetDelegateAsync<T>();
+            public abstract Task<Result<T>> GetValueAsync<T>();
+        }
+
+        public struct Result<T>
+        {
+            public static readonly Result<T> Empty = new Result<T>();
+
+            public Result(T value)
+            {
+                this.Value = value;
+                this.IsValid = true;
+            }
+
+            public readonly T Value;
+            public readonly bool IsValid;
         }
 
         #endregion

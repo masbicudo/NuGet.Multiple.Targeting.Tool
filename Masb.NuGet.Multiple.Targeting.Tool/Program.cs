@@ -23,6 +23,12 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 #if DEBUG
             aargs += @" -solution: C:\Projetos\DataStructures\DataStructures.net45.sln";
 #endif
+
+            await MiniIoC.RegisterAsync<IFrameworkInfoCache>(c => new StorageFrameworkInfoCache(c.Get<IBlobStorageManager>()));
+            await MiniIoC.RegisterAsync<IBlobStorageManager>(c => new AppDataBlobStorageManager());
+
+            var cache = await MyIoC.GetAsync<IFrameworkInfoCache>();
+
             ConsoleHelper.IsActive = true;
             var nodes = await FrameworkInfo.GetFrameworkGraph();
 
