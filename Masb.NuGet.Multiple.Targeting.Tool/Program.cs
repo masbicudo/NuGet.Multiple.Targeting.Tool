@@ -1,6 +1,6 @@
-﻿using System.Collections.Generic;
-using System.Collections.Immutable;
-using System.Diagnostics;
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -13,6 +13,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
     {
         static void Main(string[] args)
         {
+            Console.SetBufferSize(200, 8000);
+            Console.SetWindowSize(200, 80);
             Task.WaitAll(MainAsync(args));
         }
 
@@ -43,6 +45,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             var workspace = MSBuildWorkspace.Create();
             foreach (var slnPath in slnPathes)
             {
+                if (!File.Exists(slnPath))
+                    throw new FileNotFoundException("Solution file does not exist:\n - " + slnPath);
+
                 var solution = await workspace.OpenSolutionAsync(slnPath);
 
                 // First thing to do is analyse what .Net profiles may be targeted by this solution.
@@ -82,6 +87,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 INamedTypeSymbol[] usedTypes;
                 foreach (var project in sortedProject)
                 {
+                    ConsoleHelper.WriteLine("Processing project: " + PathHelper.GetRelativePath(solution.FilePath, project.FilePath), ConsoleColor.DarkMagenta);
+
                     var project2 = project;
 
                     // if we skip this line the project comes without references,
@@ -89,13 +96,20 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     project2 = await project2.GetProjectWithReferencesAsync();
 
                     var compilation = await project2.GetCompilationAsync();
-                    var diag = compilation.GetDiagnostics();
+                    var diag = compilation.GetDiagnostics()
+                        .WhereAsArray(x => !x.IsWarningAsError && x.DefaultSeverity == DiagnosticSeverity.Error);
+
                     if (diag.Length == 0)
                     {
                         var locator = new UsedTypeLocator(compilation);
 
                         foreach (var syntaxTree in compilation.SyntaxTrees)
                         {
+                            ConsoleHelper.WriteLine(
+                                "Loading file: " + PathHelper.GetRelativePath(solution.FilePath, syntaxTree.FilePath),
+                                ConsoleColor.Magenta,
+                                1);
+
                             var root = await syntaxTree.GetRootAsync();
                             locator.VisitSyntax(root);
                         }
@@ -114,7 +128,17 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         // determining what frameworks support this set of types
                         var supportedFrameworks = await frameworkRequirements.GetSupportGraphAsync(hierarchyGraph);
 
-                        Debugger.Break();
+                        ConsoleHelper.WriteLine();
+                        ConsoleHelper.Write("LIST OF FRAMEWORKS THAT SUPPORT: ", ConsoleColor.Yellow);
+                        ConsoleHelper.WriteLine(project2.FilePath, ConsoleColor.Blue);
+                        ConsoleHelper.WriteLine();
+
+                        foreach (var node in supportedFrameworks)
+                            node.Visit(path => ConsoleHelper.WriteLine(path.Peek().ToString(), ConsoleColor.White, path.Count()));
+
+                        ConsoleHelper.WriteLine();
+                        ConsoleHelper.WriteLine("Type any key to continue", ConsoleColor.Gray);
+                        Console.ReadKey();
                     }
                 }
 

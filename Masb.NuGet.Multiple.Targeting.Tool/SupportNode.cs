@@ -31,5 +31,21 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         {
             return this.HierarchyGraph.ToString();
         }
+
+        public void Visit(Action<ImmutableStack<SupportGraph>> action)
+        {
+            this.Visit(this, ImmutableStack<SupportGraph>.Empty, action);
+        }
+
+        private void Visit(
+            SupportGraph hierarchyGraph,
+            ImmutableStack<SupportGraph> stack,
+            Action<ImmutableStack<SupportGraph>> action)
+        {
+            stack = stack.Push(hierarchyGraph);
+            action(stack);
+            foreach (var each in hierarchyGraph.Children)
+                this.Visit(each, stack, action);
+        }
     }
 }

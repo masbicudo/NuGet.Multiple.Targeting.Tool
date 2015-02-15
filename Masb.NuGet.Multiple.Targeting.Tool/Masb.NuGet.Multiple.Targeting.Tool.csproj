@@ -153,6 +153,7 @@
     <Compile Include="DirectoryChain.cs" />
     <Compile Include="MiniIoCDefaults.cs" />
     <Compile Include="MyIoC.cs" />
+    <Compile Include="PathHelperTests.cs" />
     <Compile Include="PathHelper.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

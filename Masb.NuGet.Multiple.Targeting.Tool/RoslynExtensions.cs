@@ -2,11 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.Versioning;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using JetBrains.Annotations;
 using Microsoft.CodeAnalysis;
+using Newtonsoft.Json.Schema;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
 {
@@ -78,34 +81,152 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             if (frameworkName == null)
                 throw new ArgumentNullException("frameworkName");
 
-            var frameworkInfo = await FrameworkInfo.GetOrCreateAsync(frameworkName);
+            // some lazy things
+            var lazyTargetFrmkInfo = new Lazy<Task<FrameworkInfo>>(
+                async () =>
+                {
+                    var frameworkInfo = await FrameworkInfo.GetOrCreateAsync(frameworkName);
+                    if (frameworkInfo == null)
+                        throw new Exception("Invalid framework name");
+                    return frameworkInfo;
+                },
+                LazyThreadSafetyMode.None);
 
-            if (frameworkInfo == null)
-                throw new Exception("Invalid framework name");
+            var lazyTargetLibraries = new Lazy<Task<Dictionary<string, string>>>(
+                async () =>
+                {
+                    var targetFrameworkInfo = await lazyTargetFrmkInfo.Value;
+                    return targetFrameworkInfo.AssemblyInfos
+                        .ToDictionary(
+                            x => x.RelativePath,
+                            targetFrameworkInfo.GetAssemblyPath,
+                            StringComparer.InvariantCultureIgnoreCase);
+                },
+                LazyThreadSafetyMode.None);
 
-            var libraries = frameworkInfo.AssemblyInfos
-                .ToDictionary(x => x.RelativePath, frameworkInfo.GetAssemblyPath);
+            // The new list of references, that will replace the current project references.
+            var newRefsList = new List<MetadataReference>(project.MetadataReferences.Count);
+            bool anyChanges = false;
 
-            var xdoc = XDocument.Load(project.FilePath);
-            XNamespace msbuild = "http://schemas.microsoft.com/developer/msbuild/2003";
+            // first we need to process already existing references:
+            //  - if it's a framework reference:
+            //      - if source and target framework differs, replace the reference
+            //      - if the target framework doesn't contain the reference, remove it
+            //  - if it's not a frmk ref, leave it there
+            var replacements = from item in project.MetadataReferences
+                               let itemFrmkName = PathHelper.GetFrameworkName(item.Display)
+                               select GetReferenceReplacementAsync(
+                                   frameworkName,
+                                   item,
+                                   itemFrmkName,
+                                   lazyTargetFrmkInfo,
+                                   lazyTargetLibraries);
 
-            var references = xdoc.Descendants(msbuild + "ItemGroup").Descendants(msbuild + "Reference");
-            var includesRelPaths = references
-                .Select(x => x.Attribute("Include").Value)
-                .Concat(new[] { "mscorlib" })
-                .Distinct(StringComparer.InvariantCultureIgnoreCase)
-                .Select(x => string.Format("~\\{0}.dll", x))
-                .ToArray();
+            foreach (var replacement in replacements)
+            {
+                var repl = await replacement;
+                if (repl.NewItem != null)
+                {
+                    newRefsList.Add(repl.NewItem);
+                    if (!repl.OldItem.Equals(repl.NewItem))
+                        anyChanges = true;
+                }
+            }
 
-            var includes = includesRelPaths
-                .Where(libraries.ContainsKey)
-                .Select(i => libraries[i])
-                .Select(fname => MetadataReference.CreateFromFile(fname))
-                .ToArray();
+            // second, we need to open the project file and scan for references that may be missing
+            if (project.FilePath != null)
+            {
+                string[] pathsToInclude = null;
 
-            var project2 = project.AddMetadataReferences(includes);
+                {
+                    var xdoc = XDocument.Load(project.FilePath);
+                    XNamespace msbuild = "http://schemas.microsoft.com/developer/msbuild/2003";
 
-            return project2;
+                    var references = xdoc.Descendants(msbuild + "ItemGroup").Descendants(msbuild + "Reference");
+                    pathsToInclude = (
+                        from re in references
+                        let include = new AssemblyName(re.Attribute("Include").Value)
+                        let hintPath = re.Element("HintPath").With(e => e == null ? null : e.Value)
+                        select hintPath == null
+                            ? string.Format("~\\{0}.dll", include.Name)
+                            : PathHelper.Combine(project.FilePath, hintPath)
+                        )
+                        .Concat(new[] { "~\\mscorlib.dll" })
+                        .Distinct()
+                        .ToArray();
+                }
+
+                var alreadyAdded = new HashSet<string>(
+                    newRefsList.Select(x => x.Display),
+                    StringComparer.InvariantCultureIgnoreCase);
+
+                foreach (var path in pathsToInclude)
+                {
+                    if (path == null)
+                        continue;
+
+                    if (path.StartsWith("~\\"))
+                    {
+                        var frameworkInfo = await lazyTargetFrmkInfo.Value;
+                        var newAssembly = await frameworkInfo.GetAssemblyInfoByRelativePathAsync(path);
+                        var libraries = await lazyTargetLibraries.Value;
+                        if (newAssembly != null && libraries.ContainsKey(path))
+                        {
+                            var newAssemblyPath = frameworkInfo.GetAssemblyPath(newAssembly);
+                            if (!alreadyAdded.Contains(newAssemblyPath))
+                            {
+                                var newFrmkRef = MetadataReference.CreateFromFile(newAssemblyPath);
+                                newRefsList.Add(newFrmkRef);
+                                anyChanges = true;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var newAssemblyPath = PathHelper.Combine(project.FilePath, path);
+                        if (!alreadyAdded.Contains(newAssemblyPath) && File.Exists(newAssemblyPath))
+                        {
+                            var newFrmkRef = MetadataReference.CreateFromFile(newAssemblyPath);
+                            newRefsList.Add(newFrmkRef);
+                            anyChanges = true;
+                        }
+                    }
+                }
+            }
+
+            // finally replacing all references, if needed
+            if (anyChanges)
+                project = project.WithMetadataReferences(newRefsList);
+
+            return project;
+        }
+
+        private static async Task<DiffItem<MetadataReference>> GetReferenceReplacementAsync(
+            FrameworkName frameworkName,
+            MetadataReference item,
+            FrameworkName itemFrmkName,
+            Lazy<Task<FrameworkInfo>> lazyTargetFrameworkInfo,
+            Lazy<Task<Dictionary<string, string>>> lazyTargetLibraries)
+        {
+            if (item == null || itemFrmkName.Equals(frameworkName))
+                return new DiffItem<MetadataReference>(item, item);
+
+            string relativePath;
+            if (PathHelper.TryGetFrameworkRelativePath(item.Display, out relativePath))
+            {
+                var frameworkInfo = await lazyTargetFrameworkInfo.Value;
+                var newAssembly = await frameworkInfo.GetAssemblyInfoByRelativePathAsync(relativePath);
+                var libraries = await lazyTargetLibraries.Value;
+                if (newAssembly != null && libraries.ContainsKey(relativePath))
+                {
+                    var newAssemblyPath = frameworkInfo.GetAssemblyPath(newAssembly);
+                    var newFrmkRef = MetadataReference.CreateFromFile(newAssemblyPath);
+
+                    return new DiffItem<MetadataReference>(item, newFrmkRef);
+                }
+            }
+
+            return new DiffItem<MetadataReference>(item, null);
         }
 
         /// <summary>
@@ -115,7 +236,13 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// <returns>True if the metadata reference refers to a framework assembly.</returns>
         public static bool IsFrameworkReference(this MetadataReference reference)
         {
-            var frmkName = PathHelper.GetFrameworkName(reference.Display);
+            var path = reference.Display;
+            return IsFrameworkReference(path);
+        }
+
+        private static bool IsFrameworkReference(string path)
+        {
+            var frmkName = PathHelper.GetFrameworkName(path);
             return frmkName != null;
         }
 
@@ -141,7 +268,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 throw new ArgumentNullException("relativeReferences");
 
             var includesRelPaths = new HashSet<string>(relativeReferences, StringComparer.InvariantCultureIgnoreCase);
-            includesRelPaths.RemoveWhere(String.IsNullOrWhiteSpace);
+            includesRelPaths.RemoveWhere(string.IsNullOrWhiteSpace);
 
             // getting current framework references and then
             //  - if present in the new target framework: replace by the new reference
@@ -153,8 +280,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             var refsToRemove = new List<MetadataReference>(currentFrmkRefs.Length);
             foreach (var eachFrmkRef in currentFrmkRefs)
             {
-                var relativePath = eachFrmkRef.Display;
-                if (PathHelper.TryGetFrameworkRelativePath(ref relativePath))
+                string relativePath;
+                if (PathHelper.TryGetFrameworkRelativePath(eachFrmkRef.Display, out relativePath))
                 {
                     var newAssembly = await frameworkInfo.GetAssemblyInfoByRelativePathAsync(relativePath);
                     if (newAssembly != null)
@@ -220,6 +347,30 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     .ToArray();
 
             return null;
+        }
+    }
+
+    public struct DiffItem<T>
+    {
+        public readonly T OldItem;
+
+        public readonly T NewItem;
+
+        public DiffItem(T oldItem, T newItem)
+        {
+            this.OldItem = oldItem;
+            this.NewItem = newItem;
+        }
+    }
+
+    internal static class ObjectExtensions
+    {
+        public static TOut With<T, TOut>(this T obj, [NotNull] Func<T, TOut> func)
+        {
+            if (func == null)
+                throw new ArgumentNullException("func");
+
+            return func(obj);
         }
     }
 }

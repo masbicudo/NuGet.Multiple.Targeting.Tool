@@ -341,7 +341,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 .GroupBy(x => x)
                 .ToDictionary(
                     x => x.Key,
-                    x => dlls.SingleOrDefault(y => StringComparer.InvariantCultureIgnoreCase.Equals(y.Name, x.First())));
+                    x => dlls.SingleOrDefault(y => StringComparer.InvariantCultureIgnoreCase.Equals(y.Name, x.First())),
+                    StringComparer.InvariantCultureIgnoreCase);
 
             var filteredDllsNotInGac = xdoc
                 .Descendants("File")
@@ -350,7 +351,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 .GroupBy(x => x)
                 .ToDictionary(
                     x => x.Key,
-                    x => dlls.SingleOrDefault(y => StringComparer.InvariantCultureIgnoreCase.Equals(y.Name, x.First())));
+                    x => dlls.SingleOrDefault(y => StringComparer.InvariantCultureIgnoreCase.Equals(y.Name, x.First())),
+                    StringComparer.InvariantCultureIgnoreCase);
 
             foreach (var kv in filteredDllsInGac)
                 filteredDllsNotInGac.Remove(kv.Key);

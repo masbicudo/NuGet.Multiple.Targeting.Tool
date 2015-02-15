@@ -81,11 +81,12 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                          || t.DeclaredAccessibility == Accessibility.Protected)
                 .Select(TypeSymbolInfo.Create).ToImmutableHashSet();
 
-            if (!PathHelper.TryGetFrameworkRelativePath(ref assemblyFile))
+            string relAssemblyFile;
+            if (!PathHelper.TryGetFrameworkRelativePath(assemblyFile, out relAssemblyFile))
                 // TODO: should we ever consider GAC assemblies?
                 throw new Exception("Framework assemblies must all be inside the framework path:\n - " + assemblyFile);
 
-            return new AssemblyInfo(assemblyFile, assemblyName, allTypes2);
+            return new AssemblyInfo(relAssemblyFile, assemblyName, allTypes2);
         }
 
         private static IEnumerable<INamedTypeSymbol> LocateTypeSymbols(INamespaceOrTypeSymbol rootSymbol)
