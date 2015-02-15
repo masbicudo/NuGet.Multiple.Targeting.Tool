@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Masb.NuGet.Multiple.Targeting.Tool.JsonModels;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
 
@@ -25,11 +27,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 #if DEBUG
             aargs += @" -solution: C:\Projetos\DataStructures\DataStructures.net45.sln";
 #endif
-
+            // initializing components
             await MiniIoC.RegisterAsync<IFrameworkInfoCache>(c => new StorageFrameworkInfoCache(c.Get<IBlobStorageManager>()));
             await MiniIoC.RegisterAsync<IBlobStorageManager>(c => new AppDataBlobStorageManager());
-
-            var cache = await MyIoC.GetAsync<IFrameworkInfoCache>();
 
             ConsoleHelper.IsActive = true;
             var nodes = await FrameworkInfo.GetFrameworkGraph();
@@ -132,12 +132,52 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         ConsoleHelper.WriteLine(project2.FilePath, ConsoleColor.Blue);
                         ConsoleHelper.WriteLine();
 
+                        var meta = MetaJson.Load();
+
+                        var dicPossibleChoices = new Dictionary<string, SupportGraph>(StringComparer.InvariantCultureIgnoreCase);
                         foreach (var node in supportedFrameworks)
-                            node.Visit(path => ConsoleHelper.WriteLine(path.Peek().ToString(), ConsoleColor.White, path.Count()));
+                            node.Visit(
+                                path =>
+                                {
+                                    var name = path.Peek().ToString();
+
+                                    string newName;
+                                    if (meta.aliases.TryGetValue(name, out newName))
+                                        name = newName;
+
+                                    string acronym = null;
+
+                                    PortableProfileMetaJson portable;
+                                    if (meta.portableProfiles.TryGetValue(name, out portable))
+                                        acronym = new FrameworkName(name).Profile;
+
+                                    FrameworkMetaJson frmk;
+                                    if (meta.frameworks.TryGetValue(name, out frmk))
+                                        acronym = frmk.nugetIds.FirstOrDefault();
+
+                                    if (acronym != null)
+                                        dicPossibleChoices.Add(acronym, path.Peek());
+
+                                    ConsoleHelper.Write(name, acronym == null ? ConsoleColor.DarkGray : ConsoleColor.White, path.Count());
+                                    if (acronym != null)
+                                    {
+                                        ConsoleHelper.Write(" ( ", ConsoleColor.DarkCyan);
+                                        ConsoleHelper.Write(acronym, ConsoleColor.Cyan);
+                                        ConsoleHelper.Write(" ) ", ConsoleColor.DarkCyan);
+                                    }
+
+                                    ConsoleHelper.WriteLine();
+                                });
 
                         ConsoleHelper.WriteLine();
-                        ConsoleHelper.WriteLine("Type any key to continue", ConsoleColor.Gray);
-                        Console.ReadKey();
+                        ConsoleHelper.WriteLine("Select the frameworks to use:", ConsoleColor.Gray);
+                        var chosen = Console.ReadLine();
+                        if (chosen != null)
+                        {
+                            var choices = chosen.Split(@",; \/|+-_".ToCharArray());
+
+                        }
+
                     }
                 }
 
