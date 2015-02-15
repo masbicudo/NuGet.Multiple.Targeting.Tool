@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using JetBrains.Annotations;
 using Microsoft.CodeAnalysis;
-using Newtonsoft.Json.Schema;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
 {

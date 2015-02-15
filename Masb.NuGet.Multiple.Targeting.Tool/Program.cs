@@ -84,7 +84,6 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     .GetTopologicallySortedProjects()
                     .Select(solution.GetProject);
 
-                INamedTypeSymbol[] usedTypes;
                 foreach (var project in sortedProject)
                 {
                     ConsoleHelper.WriteLine("Processing project: " + PathHelper.GetRelativePath(solution.FilePath, project.FilePath), ConsoleColor.DarkMagenta);

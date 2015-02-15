@@ -145,6 +145,10 @@
     <Compile Include="JsonModels.StephenCleary\ConvertStephenClearyJsonModel.cs" />
     <Compile Include="JsonModels.StephenCleary\FrameworkProfileJson.cs" />
     <Compile Include="JsonModels.StephenCleary\SupportedFrameworkJson.cs" />
+    <Compile Include="JsonModels\FrameworkMetaJson.cs" />
+    <Compile Include="JsonModels\FilterMetaJson.cs" />
+    <Compile Include="JsonModels\MetaJson.cs" />
+    <Compile Include="JsonModels\PortableProfileMetaJson.cs" />
     <Compile Include="Json\FrameworkNameConverter.cs" />
     <Compile Include="Json\AssemblyInfoJson.cs" />
     <Compile Include="Json\FrameworkInfoJson.cs" />
@@ -183,6 +187,7 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
