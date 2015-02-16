@@ -1,15 +1,16 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Newtonsoft.Json;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool.JsonModels.StephenCleary
 {
     internal static class ConvertStephenClearyJsonModel
     {
-        public static string ToMetaJson()
+        public static async Task<string> ToMetaJson()
         {
             var profiles = PortableProfilesJson.Load();
-            var frameworks = MetaJson.Load();
+            var frameworks = await MetaJson.Load();
 
             foreach (var profile in profiles.data)
             {

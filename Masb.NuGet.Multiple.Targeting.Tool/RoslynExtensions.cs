@@ -41,9 +41,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 ImportCSharp,
             };
 
-        public static FrameworkName GetFrameworkName(this Project project)
+        public static async Task<FrameworkName> GetFrameworkName(this Project project)
         {
-            var xdoc = XDocument.Load(project.FilePath);
+            var xdoc = await XmlHelpers.ReadXDocumentAsync(project.FilePath);
             XNamespace msbuild = "http://schemas.microsoft.com/developer/msbuild/2003";
             var version = xdoc.Descendants(msbuild + "TargetFrameworkVersion").Single().Value;
             var profile = xdoc.Descendants(msbuild + "TargetFrameworkProfile").Single().Value;
@@ -65,7 +65,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         public static async Task<Project> GetProjectWithReferencesAsync(this Project project)
         {
-            var frameworkName = project.GetFrameworkName();
+            var frameworkName = await project.GetFrameworkName();
             var compilation = await project.GetProjectWithReferencesAsync(frameworkName);
             return compilation;
         }

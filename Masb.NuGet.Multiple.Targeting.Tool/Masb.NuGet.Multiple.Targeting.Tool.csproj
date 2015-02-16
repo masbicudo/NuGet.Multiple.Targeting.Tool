@@ -168,6 +168,7 @@
     <Compile Include="RoslynExtensions.cs" />
     <Compile Include="FrameworkFilter.cs" />
     <Compile Include="StorageFrameworkInfoCache.cs" />
+    <Compile Include="FileHelper.cs" />
     <Compile Include="SupportNode.cs" />
     <Compile Include="TypeSymbolInfo.cs" />
     <Compile Include="UsedTypeLocator.cs" />

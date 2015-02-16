@@ -7,41 +7,18 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 {
     internal static class XmlHelpers
     {
-        public static async Task<XDocument> ReadXml(string xmlFileName)
+        public static async Task<XDocument> ReadXDocumentAsync(string xmlFileName)
         {
-            using (var stream = new FileStream(
-                xmlFileName,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 4096,
-                useAsync: true))
-            {
-                using (var reader = new StreamReader(stream))
-                {
-                    return XDocument.Load(await reader.ReadToEndAsync());
-                }
-            }
+            var xml = await FileHelper.ReadToEndAsync(xmlFileName);
+            return XDocument.Load(new StringReader(xml));
         }
 
         public static async Task<T> DesserializeAsync<T>(string xmlFileName)
         {
-            using (var stream = new FileStream(
-                xmlFileName,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.Read,
-                bufferSize: 4096,
-                useAsync: true))
-            {
-                using (var reader = new StreamReader(stream))
-                {
-                    var text = await reader.ReadToEndAsync();
-                    var xmlSer = new XmlSerializer(typeof(T));
-                    var r = (T)xmlSer.Deserialize(new StringReader(text));
-                    return r;
-                }
-            }
+            var xml = await FileHelper.ReadToEndAsync(xmlFileName);
+            var xmlSer = new XmlSerializer(typeof(T));
+            var r = (T)xmlSer.Deserialize(new StringReader(xml));
+            return r;
         }
     }
 }

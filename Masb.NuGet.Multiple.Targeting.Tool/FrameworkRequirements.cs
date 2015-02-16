@@ -2,9 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
+using Masb.NuGet.Multiple.Targeting.Tool.JsonModels;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
 {
@@ -45,34 +48,117 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             if (unsupportedTypes.Count > 0)
                 return false;
 
-            // trying to compile
-            // TODO: Set debug symbols according to the used framework: net40; portable; sl50; etc.
-            // TODO: This is needed because the user might already be using these symbols
-            // TODO: to compensate incompatibilities between frameworks.
-            var recompilation = await this.Compilation.RecompileWithReferencesAsync(frameworkInfo, neededAssemblies);
-            var diag = recompilation.GetDiagnostics();
+            // Setting precompilation symbols according ot the target framework being tested.
+            //  (e.g. net40; portable; sl50; etc.)
+            // This is needed because the user might already be using these symbols
+            // to compensate incompatibilities between frameworks.
+            var currentFrameworkName = await this.Project.GetFrameworkName();
 
-            foreach (var d in diag)
-            {
-                if (!d.IsWarningAsError)
-                    continue;
+            var nugetSymbolsTgt = await NugetSymbols(frameworkInfo.FrameworkName);
+            var nugetSymbols = await NugetSymbols(currentFrameworkName);
 
-                if (!d.Location.IsInSource)
-                    return false;
+            var symbols = this.Project.ParseOptions.PreprocessorSymbolNames
+                .Concat(nugetSymbolsTgt.nugetSymbols)
+                .Except(nugetSymbols.nugetSymbols)
+                .Distinct(StringComparer.InvariantCultureIgnoreCase);
 
-                var semantic = recompilation.GetSemanticModel(d.Location.SourceTree);
-                var root = await d.Location.SourceTree.GetRootAsync();
-                var node = root.FindNode(d.Location.SourceSpan);
-                var typeInfo = semantic.GetTypeInfo(node);
-                if (typeInfo.Type.TypeKind == TypeKind.Error)
-                {
-                    // TODO: see if the type is in the ignoreList
-                    //if (!isInIgnoreList)
-                    //    return false;
-                }
-            }
+            var project = this.Project.WithParseOptions(
+                new CSharpParseOptions(preprocessorSymbols: symbols.Concat(new[] { "NUGET_Test" })));
+            var compilation = await project.GetCompilationAsync();
+            var recompilation = await compilation.RecompileWithReferencesAsync(frameworkInfo, neededAssemblies);
+
+            var diag = recompilation.GetDiagnostics()
+                .WhereAsArray(x => !x.IsWarningAsError && x.DefaultSeverity == DiagnosticSeverity.Error);
+
+            // TODO: should errors be ignored exclusivelly through 'NUGET_Test' precompilation symbol?
+            if (diag.Length > 0)
+                return false;
+            //foreach (var d in diag)
+            //{
+            //    if (!d.Location.IsInSource)
+            //        return false;
+
+            //    var semantic = recompilation.GetSemanticModel(d.Location.SourceTree);
+            //    var root = await d.Location.SourceTree.GetRootAsync();
+            //    var node = root.FindNode(d.Location.SourceSpan);
+            //    var typeInfo = semantic.GetTypeInfo(node);
+            //    if (typeInfo.Type.TypeKind == TypeKind.Error)
+            //    {
+            //        // TODO: see if the type is in the ignoreList
+            //        //if (!isInIgnoreList)
+            //        //    return false;
+            //    }
+            //}
 
             return true;
+        }
+
+        private static async Task<NugetSymbolsResult> NugetSymbols(FrameworkName frameworkName)
+        {
+            var meta = await MetaJson.Load();
+
+            var name = frameworkName.ToString();
+            string newName;
+            if (meta.aliases.TryGetValue(name, out newName))
+                name = newName;
+
+            string nugetName = null;
+            IEnumerable<string> nugetSymbols = Enumerable.Empty<string>();
+
+            PortableProfileMetaJson profile;
+            if (meta.portableProfiles.TryGetValue(name, out profile))
+            {
+                nugetName = profile.nugetIds.FirstOrDefault();
+                nugetSymbols = new[] { "portable" };
+                var addPortableSymbols = profile.supports
+                    .SelectMany(
+                        name1 =>
+                        {
+                            IEnumerable<string> names1 = new[] { name1 };
+
+                            names1 = names1
+                                .SelectMany<string, string>(
+                                    nm =>
+                                    {
+                                        FilterMetaJson filter1;
+                                        if (meta.filters.TryGetValue(nm, out filter1))
+                                            return filter1.contains;
+                                        return new[] { nm };
+                                    });
+
+                            names1 = names1
+                                .Select(
+                                    nm =>
+                                    {
+                                        string newName1;
+                                        if (meta.aliases.TryGetValue(nm, out newName1))
+                                            nm = newName1;
+                                        return nm;
+                                    });
+
+                            var result1 = names1.SelectMany(nm => meta.frameworks[nm].nugetIds);
+                            return result1;
+                        });
+                nugetSymbols = nugetSymbols.Concat(addPortableSymbols);
+            }
+
+            FrameworkMetaJson frmk;
+            if (nugetName == null && meta.frameworks.TryGetValue(name, out frmk))
+            {
+                nugetName = frmk.nugetIds.FirstOrDefault();
+                nugetSymbols = meta.frameworks[name].nugetIds;
+            }
+
+            NugetSymbolsResult result;
+            result.nugetName = nugetName;
+            result.nugetSymbols = nugetSymbols.Distinct().ToArray();
+            return result;
+        }
+
+        struct NugetSymbolsResult
+        {
+            public string nugetName;
+            public string[] nugetSymbols;
         }
 
         /// <summary>
@@ -80,7 +166,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         /// </summary>
         public string[] Types { get; set; }
 
-        public Compilation Compilation { get; set; }
+        public Project Project { get; set; }
 
         public async Task<SupportGraph[]> GetSupportGraphAsync(HierarchyGraph hierarchyGraph)
         {

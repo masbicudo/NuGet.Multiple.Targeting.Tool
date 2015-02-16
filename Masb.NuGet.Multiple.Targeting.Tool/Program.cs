@@ -115,7 +115,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
                         var frameworkRequirements = new FrameworkRequirements
                             {
-                                Compilation = compilation,
+                                Project = project,
 
                                 Types = locator.UsedTypes
                                     .Select(RoslynExtensions.GetTypeFullName)
@@ -132,7 +132,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         ConsoleHelper.WriteLine(project2.FilePath, ConsoleColor.Blue);
                         ConsoleHelper.WriteLine();
 
-                        var meta = MetaJson.Load();
+                        var meta = await MetaJson.Load();
 
                         var dicPossibleChoices = new Dictionary<string, SupportGraph>(StringComparer.InvariantCultureIgnoreCase);
                         foreach (var node in supportedFrameworks)
@@ -176,6 +176,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         {
                             var choices = chosen.Split(@",; \/|+-_".ToCharArray());
 
+                            // we need to 
                         }
 
                     }
