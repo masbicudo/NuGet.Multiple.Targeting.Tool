@@ -16,8 +16,6 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 {
     public class FrameworkInfo : IEquatable<FrameworkInfo>
     {
-        private readonly IFrameworkInfoCache cache;
-
         public FrameworkInfo(
             [NotNull] FrameworkName frameworkName,
             [NotNull] IEnumerable<AssemblyInfo> assemblyInfos,

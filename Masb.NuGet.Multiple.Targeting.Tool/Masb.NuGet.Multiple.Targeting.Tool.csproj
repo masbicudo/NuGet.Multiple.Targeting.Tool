@@ -176,9 +176,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <Content Include="features.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
     <Content Include="frameworks.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
