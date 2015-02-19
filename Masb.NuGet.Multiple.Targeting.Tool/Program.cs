@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Masb.NuGet.Multiple.Targeting.Tool.JsonModels;
 using Microsoft.CodeAnalysis;
@@ -35,10 +34,11 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             var nodes = await FrameworkInfo.GetFrameworkGraph();
 
             // looking for all solutions in the current directory
-            var slnPathesMatch = Regex.Matches(aargs, @"(?<=\s|^)\-solution:\s+(?:""(?<SLN>[^""]*\.sln)""|(?<SLN>\S*?\.sln))(?=\s+\-|$)").OfType<Match>();
-            var slnPathes = slnPathesMatch.Select(m => m.Groups["SLN"].Value).ToArray();
-            await AnalyseSolutionsAsync(slnPathes, nodes);
+            var slnPathes = ArgsHelper.ReadArg(aargs, "solution", ArgType.Path).OfType<string>().ToArray();
+            if (slnPathes.Length > 0)
+                await AnalyseSolutionsAsync(slnPathes, nodes);
         }
+
 
         private static async Task AnalyseSolutionsAsync(IEnumerable<string> slnPathes, HierarchyGraph hierarchyGraph)
         {
