@@ -146,10 +146,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         from re in references
                         let include = new AssemblyName(re.Attribute("Include").Value)
                         let hintPath = re.Element("HintPath").With(e => e == null ? null : e.Value)
-                        select hintPath == null
-                            ? string.Format("~\\{0}.dll", include.Name)
-                            : PathHelper.Combine(project.FilePath, hintPath)
+                        select GetAssemblyPath(project, hintPath, include)
                         )
+                        .Where(x => x != null)
                         .Concat(new[] { "~\\mscorlib.dll" })
                         .Distinct()
                         .ToArray();
@@ -198,6 +197,26 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 project = project.WithMetadataReferences(newRefsList);
 
             return project;
+        }
+
+        private static string GetAssemblyPath(Project project, string hintPath, AssemblyName include)
+        {
+            if (hintPath != null)
+                return PathHelper.Combine(project.FilePath, hintPath);
+
+            if (include.Version != null && include.GetPublicKeyToken().Length > 0)
+            {
+                try
+                {
+                    return Assembly.ReflectionOnlyLoad(include.FullName).Location;
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+
+            return string.Format("~\\{0}.dll", include.Name);
         }
 
         private static async Task<DiffItem<MetadataReference>> GetReferenceReplacementAsync(
