@@ -55,14 +55,19 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         {
             var nodes = node.DescendantNodes(n => true);
 
+            var st = node.SyntaxTree;
+            var sm = this.compilation.GetSemanticModel(st);
+
             if (nodes != null)
             {
+                var syntaxNodes = nodes as SyntaxNode[] ?? nodes.ToArray();
+
                 // IdentifierNameSyntax:
                 //  - var keyword
                 //  - identifiers of any kind (including type names)
-                var namedTypes = nodes
+                var namedTypes = syntaxNodes
                     .OfType<IdentifierNameSyntax>()
-                    .Select(id => this.compilation.GetSemanticModel(id.SyntaxTree).GetSymbolInfo(id).Symbol)
+                    .Select(id => sm.GetSymbolInfo(id).Symbol)
                     .OfType<INamedTypeSymbol>()
                     .ToArray();
 
@@ -73,9 +78,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 //  - property uses
                 //  - field uses
                 //  - all kinds of composite expressions
-                var expressionTypes = nodes
+                var expressionTypes = syntaxNodes
                     .OfType<ExpressionSyntax>()
-                    .Select(ma => this.compilation.GetSemanticModel(ma.SyntaxTree).GetTypeInfo(ma).Type)
+                    .Select(ma => sm.GetTypeInfo(ma).Type)
                     .OfType<INamedTypeSymbol>()
                     .ToArray();
 
