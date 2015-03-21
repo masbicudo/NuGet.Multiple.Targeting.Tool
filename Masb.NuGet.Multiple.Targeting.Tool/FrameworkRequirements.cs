@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Runtime.Versioning;
 using System.Threading.Tasks;
@@ -71,24 +70,10 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 .WhereAsArray(x => !x.IsWarningAsError && x.DefaultSeverity == DiagnosticSeverity.Error);
 
             // TODO: should errors be ignored exclusivelly through 'NUGET_Test' precompilation symbol?
+            // TODO: maybe some of the errors should be ignored, e.g. those not related to the .Net framework
+            // TODO: will it be possible to convert projects that don't build (e.g. when frmk is switched no new errors can appear)
             if (diag.Length > 0)
                 return false;
-            //foreach (var d in diag)
-            //{
-            //    if (!d.Location.IsInSource)
-            //        return false;
-
-            //    var semantic = recompilation.GetSemanticModel(d.Location.SourceTree);
-            //    var root = await d.Location.SourceTree.GetRootAsync();
-            //    var node = root.FindNode(d.Location.SourceSpan);
-            //    var typeInfo = semantic.GetTypeInfo(node);
-            //    if (typeInfo.Type.TypeKind == TypeKind.Error)
-            //    {
-            //        // TODO: see if the type is in the ignoreList
-            //        //if (!isInIgnoreList)
-            //        //    return false;
-            //    }
-            //}
 
             return true;
         }
@@ -155,7 +140,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return result;
         }
 
-        struct NugetSymbolsResult
+        private struct NugetSymbolsResult
         {
             public string nugetName;
             public string[] nugetSymbols;
@@ -167,26 +152,5 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         public string[] Types { get; set; }
 
         public Project Project { get; set; }
-
-        public async Task<SupportGraph[]> GetSupportGraphAsync(HierarchyGraph hierarchyGraph)
-        {
-            var supportedFrameworks = await hierarchyGraph.VisitAsync<SupportGraph[]>(this.SupportedFrameworkNodesAsync);
-            return supportedFrameworks;
-        }
-
-        private async Task<SupportGraph[]> SupportedFrameworkNodesAsync(ImmutableStack<HierarchyGraph> path, IEnumerable<SupportGraph[]> children)
-        {
-            var childrenArray = children.SelectMany(x => x).ToImmutableArray();
-
-            if (childrenArray.Length != 1)
-            {
-                var node = path.Peek();
-                var isSupported = node.FrameworkInfo != null && (await this.SupportedBy(node.FrameworkInfo));
-                if (isSupported)
-                    return new[] { new SupportGraph(node, childrenArray) };
-            }
-
-            return childrenArray.ToArray();
-        }
     }
 }

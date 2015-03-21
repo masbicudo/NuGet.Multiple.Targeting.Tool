@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -9,54 +10,31 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 {
     public class UsedTypeLocator
     {
-        private readonly Compilation compilation;
-        private readonly HashSet<INamedTypeSymbol> usedTypes = new HashSet<INamedTypeSymbol>();
-
-        public UsedTypeLocator(Compilation compilation)
+        public static async Task<HashSet<INamedTypeSymbol>> FindUsedTypesInCompilation(
+            Compilation compilation,
+            Action<SyntaxTree> stepAction = null)
         {
-            this.compilation = compilation;
-        }
-
-        public INamedTypeSymbol[] UsedTypes
-        {
-            get { return this.usedTypes.ToArray(); }
-        }
-
-        private void Add(INamedTypeSymbol namedTypeSymbol)
-        {
-            if (namedTypeSymbol == null)
-                throw new Exception("Cannot be null.");
-
-            if (namedTypeSymbol.Locations == null
-                || namedTypeSymbol.Locations.Length == 0
-                || namedTypeSymbol.Locations.All(x => x.Kind != LocationKind.SourceFile))
+            var usedTypes = new HashSet<INamedTypeSymbol>();
+            foreach (var syntaxTree in compilation.SyntaxTrees)
             {
-                this.usedTypes.Add(namedTypeSymbol);
+                if (stepAction != null)
+                    stepAction(syntaxTree);
+                var root = await syntaxTree.GetRootAsync();
+                FindUsedTypesInSyntaxNode(compilation, usedTypes, root);
             }
 
-            if (namedTypeSymbol.TypeArguments != null)
-                this.Add(namedTypeSymbol.TypeArguments.OfType<INamedTypeSymbol>());
+            return usedTypes;
         }
 
-        private void Add(ITypeSymbol typeSymbol)
-        {
-            var namedTypeSymbol = typeSymbol as INamedTypeSymbol;
-            if (namedTypeSymbol != null)
-                this.Add(namedTypeSymbol);
-        }
-
-        private void Add(IEnumerable<INamedTypeSymbol> namedTypeSymbols)
-        {
-            foreach (var namedTypeSymbol in namedTypeSymbols)
-                this.Add(namedTypeSymbol);
-        }
-
-        public void VisitSyntax(SyntaxNode node)
+        private static void FindUsedTypesInSyntaxNode(
+            Compilation compilation,
+            HashSet<INamedTypeSymbol> usedTypes,
+            SyntaxNode node)
         {
             var nodes = node.DescendantNodes(n => true);
 
             var st = node.SyntaxTree;
-            var sm = this.compilation.GetSemanticModel(st);
+            var sm = compilation.GetSemanticModel(st);
 
             if (nodes != null)
             {
@@ -71,7 +49,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     .OfType<INamedTypeSymbol>()
                     .ToArray();
 
-                this.Add(namedTypes);
+                foreach (var namedTypeSymbol in namedTypes)
+                    Add(usedTypes, namedTypeSymbol);
 
                 // ExpressionSyntax:
                 //  - method calls
@@ -84,8 +63,26 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     .OfType<INamedTypeSymbol>()
                     .ToArray();
 
-                this.Add(expressionTypes);
+                foreach (var namedTypeSymbol in expressionTypes)
+                    Add(usedTypes, namedTypeSymbol);
             }
+        }
+
+        private static void Add(HashSet<INamedTypeSymbol> usedTypes, INamedTypeSymbol namedTypeSymbol)
+        {
+            if (namedTypeSymbol == null)
+                throw new Exception("Cannot be null.");
+
+            if (namedTypeSymbol.Locations == null
+                || namedTypeSymbol.Locations.Length == 0
+                || namedTypeSymbol.Locations.All(x => x.Kind != LocationKind.SourceFile))
+            {
+                usedTypes.Add(namedTypeSymbol);
+            }
+
+            if (namedTypeSymbol.TypeArguments != null)
+                foreach (var namedTypeSymbol2 in namedTypeSymbol.TypeArguments.OfType<INamedTypeSymbol>())
+                    Add(usedTypes, namedTypeSymbol2);
         }
     }
 }

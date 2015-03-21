@@ -57,7 +57,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             }
         }
 
-        internal HierarchyGraph([CanBeNull] FrameworkInfo frameworkInfo, ImmutableArray<HierarchyGraph> subsets)
+        internal HierarchyGraph([CanBeNull] FrameworkInfo frameworkInfo, [NotNull] IReadOnlyCollection<HierarchyGraph> subsets)
         {
             this.FrameworkInfo = frameworkInfo;
             this.Subsets = subsets;
@@ -66,7 +66,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         [CanBeNull]
         public FrameworkInfo FrameworkInfo { get; private set; }
 
-        public ImmutableArray<HierarchyGraph> Subsets { get; private set; }
+        [NotNull]
+        public IReadOnlyCollection<HierarchyGraph> Subsets { get; private set; }
 
         public override string ToString()
         {
@@ -112,12 +113,12 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         public void Visit(Action<ImmutableStack<HierarchyGraph>> action)
         {
-            this.Visit(this, ImmutableStack<HierarchyGraph>.Empty, action);
+            Visit(this, ImmutableStack<HierarchyGraph>.Empty, action);
         }
 
         public async Task VisitAsync(Func<ImmutableStack<HierarchyGraph>, Task> action)
         {
-            await this.VisitAsync(this, ImmutableStack<HierarchyGraph>.Empty, action);
+            await VisitAsync(this, ImmutableStack<HierarchyGraph>.Empty, action);
         }
 
         private async Task<TNode> VisitAsync<TNode>(
@@ -168,7 +169,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             return result;
         }
 
-        private void Visit(
+        private static void Visit(
             HierarchyGraph hierarchyGraph,
             ImmutableStack<HierarchyGraph> stack,
             Action<ImmutableStack<HierarchyGraph>> action)
@@ -176,10 +177,10 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             stack = stack.Push(hierarchyGraph);
             action(stack);
             foreach (var each in hierarchyGraph.Subsets)
-                this.Visit(each, stack, action);
+                Visit(each, stack, action);
         }
 
-        private async Task VisitAsync(
+        private static async Task VisitAsync(
             HierarchyGraph hierarchyGraph,
             ImmutableStack<HierarchyGraph> stack,
             Func<ImmutableStack<HierarchyGraph>, Task> action)
@@ -187,7 +188,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             stack = stack.Push(hierarchyGraph);
             await action(stack);
             foreach (var each in hierarchyGraph.Subsets)
-                await this.VisitAsync(each, stack, action);
+                await VisitAsync(each, stack, action);
         }
     }
 }

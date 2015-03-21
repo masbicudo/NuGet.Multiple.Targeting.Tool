@@ -141,6 +141,7 @@
     <Compile Include="FrameworkRequirements.cs" />
     <Compile Include="HierarchyGraph.cs" />
     <Compile Include="FrameworkNameSet.cs" />
+    <Compile Include="HierarchyGraphExtensions.cs" />
     <Compile Include="IBlobStorageManager.cs" />
     <Compile Include="IFrameworkInfoCache.cs" />
     <Compile Include="InMemoryCache.cs" />
@@ -166,12 +167,15 @@
     <Compile Include="PathHelper.cs" />
     <Compile Include="JsonModels.StephenCleary\PortableProfilesJson.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="ProjectAnalysis.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RoslynExtensions.cs" />
     <Compile Include="FrameworkFilter.cs" />
+    <Compile Include="SolutionAnalysis.cs" />
     <Compile Include="StorageFrameworkInfoCache.cs" />
     <Compile Include="FileHelper.cs" />
-    <Compile Include="SupportNode.cs" />
+    <Compile Include="SupportGraph2.cs" />
+    <Compile Include="SimplifiedGraph.cs" />
     <Compile Include="TypeSymbolInfo.cs" />
     <Compile Include="UsedTypeLocator.cs" />
     <Compile Include="XDocExtensions.cs" />
