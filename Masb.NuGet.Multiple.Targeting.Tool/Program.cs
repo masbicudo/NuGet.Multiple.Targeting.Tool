@@ -14,8 +14,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
     {
         static void Main(string[] args)
         {
-            Console.SetBufferSize(200, 8000);
-            Console.SetWindowSize(200, 80);
+            Console.SetBufferSize(180, 8000);
+            Console.SetWindowSize(Console.LargestWindowWidth * 9 / 10, Console.LargestWindowHeight * 9 / 10);
+            Console.SetWindowPosition(0, 0);
             Task.WaitAll(MainAsync(args));
         }
 

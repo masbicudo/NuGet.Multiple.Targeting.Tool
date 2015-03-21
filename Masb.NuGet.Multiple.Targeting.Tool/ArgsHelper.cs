@@ -11,7 +11,6 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             {
                 { ArgType.Path, @"(?:""(?<PATH>[^""]*)""|(?<PATH>\S*))(?=\s+\-|$)" },
                 { ArgType.Text, @"""(?<TEXT>[^""]*)""(?=\s+\-|$)" },
-                { ArgType.Path, @"(?:""(?<PATH>[^""]*\.sln)""|(?<PATH>\S*?\.sln))(?=\s+\-|$)" },
                 { ArgType.Integer, @"(?:""(?<PATH>[^""]*\.sln)""|(?<PATH>\S*?\.sln))(?=\s+\-|$)" },
                 { ArgType.Decimal, @"(?:""(?<PATH>[^""]*\.sln)""|(?<PATH>\S*?\.sln))(?=\s+\-|$)" },
             };
