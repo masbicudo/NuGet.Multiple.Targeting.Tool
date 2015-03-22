@@ -66,7 +66,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 var frameworkRequirements = new FrameworkRequirements
                     {
                         Project = project,
-
+                        Recompile = false,
                         Types = usedTypes
                             .Select(RoslynExtensions.RoslynExtensions.GetTypeFullName)
                             .Where(t => t != "System.Runtime.InteropServices.GuidAttribute")
@@ -75,7 +75,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                     };
 
                 // determining what frameworks support this set of types
-                var supportedFrameworks = await hierarchyGraph.GetSupportGraphAsync(frameworkRequirements);
+                var supportedFrameworks = await hierarchyGraph.GetSupportGraphAsync(frameworkRequirements, false);
 
                 return new ProjectAnalysis(project2, supportedFrameworks);
             }

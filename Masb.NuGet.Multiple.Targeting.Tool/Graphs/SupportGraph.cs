@@ -14,7 +14,12 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Graphs
         [NotNull]
         public HierarchyGraph ShadowGraph { get; private set; }
 
-        internal SupportGraph([NotNull] HierarchyGraph shadowGraph, ImmutableArray<SupportGraph> children)
+        public FrameworkAnalysisResult Result { get; private set; }
+
+        internal SupportGraph(
+            [NotNull] HierarchyGraph shadowGraph,
+            ImmutableArray<SupportGraph> children,
+            FrameworkAnalysisResult result)
             : base(shadowGraph.FrameworkInfo, children)
         {
             if (shadowGraph == null)
@@ -22,9 +27,10 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Graphs
 
             if (children.Any(x => x == null))
                 throw new ArgumentNullException("children", "No child may be null.");
-            
-            this.ShadowGraph = shadowGraph;
-        }
 
+            this.ShadowGraph = shadowGraph;
+            
+            this.Result = result;
+        }
     }
 }

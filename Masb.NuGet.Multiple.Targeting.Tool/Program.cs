@@ -68,13 +68,13 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
             // Getting the frameworks that support the given set of solutions.
             var slnPathes = ArgsHelper.ReadArg(aargs, "solution", ArgType.Path).OfType<string>().ToArray();
-            var tasks = slnPathes.Select(slnPath => SolutionAnalysis.AnalyseSolutionAsync(slnPath, nodes))
-                .ThenDo(LetUserChooseFrameworks);
-
-            await Task.WhenAll(tasks);
+            var tasks = slnPathes.Select(slnPath => SolutionAnalysis.AnalyseSolutionAsync(slnPath, nodes));
+            var results = await Task.WhenAll(tasks);
+            foreach (var solutionAnalysis in results)
+                await LetUserChooseFrameworks(solutionAnalysis);
         }
 
-        private static async void LetUserChooseFrameworks(SolutionAnalysis analysis)
+        private static async Task LetUserChooseFrameworks(SolutionAnalysis analysis)
         {
             ConsoleHelper.WriteLine();
             ConsoleHelper.Write("LIST OF FRAMEWORKS THAT SUPPORT: ", ConsoleColor.Yellow);
@@ -88,7 +88,8 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 node.Visit(
                     path =>
                     {
-                        var name = path.Peek().ToString();
+                        var current = (SupportGraph)path.Peek();
+                        var name = current.ToString();
 
                         string newName;
                         if (meta.aliases.TryGetValue(name, out newName))
@@ -104,11 +105,21 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         if (meta.frameworks.TryGetValue(name, out frmk))
                             acronym = frmk.nugetIds.FirstOrDefault();
 
-                        if (acronym != null)
+                        if (acronym != null && !dicPossibleChoices.ContainsKey(acronym))
                             dicPossibleChoices.Add(acronym, path.Peek());
+                        else
+                            acronym = null;
 
-                        ConsoleHelper.Write(name, acronym == null ? ConsoleColor.DarkGray : ConsoleColor.White, path.Count());
-                        if (acronym != null)
+                        ConsoleHelper.Write(
+                            name,
+                            !current.Result.IsOk
+                                ? ConsoleColor.Red
+                                : acronym == null
+                                    ? ConsoleColor.DarkGray
+                                    : ConsoleColor.White,
+                            path.Count());
+
+                        if (acronym != null && current.Result.IsOk)
                         {
                             ConsoleHelper.Write(" ( ", ConsoleColor.DarkCyan);
                             ConsoleHelper.Write(acronym, ConsoleColor.Cyan);

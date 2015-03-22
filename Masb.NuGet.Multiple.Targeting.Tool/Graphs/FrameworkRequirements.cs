@@ -19,7 +19,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Graphs
         /// </summary>
         /// <param name="frameworkInfo">The framework to test.</param>
         /// <returns>True if the framework support the requirements, otherwise False.</returns>
-        public async Task<bool> SupportedBy([NotNull] FrameworkInfo frameworkInfo)
+        public async Task<FrameworkAnalysisResult> SupportedBy([NotNull] FrameworkInfo frameworkInfo)
         {
             if (frameworkInfo == null)
                 throw new ArgumentNullException("frameworkInfo");
@@ -47,37 +47,40 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Graphs
                 .ToArray();
 
             if (unsupportedTypes.Count > 0)
-                return false;
+                return new FrameworkAnalysisResult(unsupportedTypes);
 
             // Setting precompilation symbols according ot the target framework being tested.
             //  (e.g. net40; portable; sl50; etc.)
             // This is needed because the user might already be using these symbols
             // to compensate incompatibilities between frameworks.
-            var currentFrameworkName = await this.Project.GetFrameworkName();
+            if (this.Recompile)
+            {
+                var currentFrameworkName = await this.Project.GetFrameworkName();
 
-            var nugetSymbolsTgt = await NugetSymbols(frameworkInfo.FrameworkName);
-            var nugetSymbols = await NugetSymbols(currentFrameworkName);
+                var nugetSymbolsTgt = await NugetSymbols(frameworkInfo.FrameworkName);
+                var nugetSymbols = await NugetSymbols(currentFrameworkName);
 
-            var symbols = this.Project.ParseOptions.PreprocessorSymbolNames
-                .Concat(nugetSymbolsTgt.nugetSymbols)
-                .Except(nugetSymbols.nugetSymbols)
-                .Distinct(StringComparer.InvariantCultureIgnoreCase);
+                var symbols = this.Project.ParseOptions.PreprocessorSymbolNames
+                    .Concat(nugetSymbolsTgt.nugetSymbols)
+                    .Except(nugetSymbols.nugetSymbols)
+                    .Distinct(StringComparer.InvariantCultureIgnoreCase);
 
-            var project = this.Project.WithParseOptions(
-                new CSharpParseOptions(preprocessorSymbols: symbols.Concat(new[] { "NUGET_Test" })));
-            var compilation = await project.GetCompilationAsync();
-            var recompilation = await compilation.RecompileWithReferencesAsync(frameworkInfo, neededAssemblies);
+                var project = this.Project.WithParseOptions(
+                    new CSharpParseOptions(preprocessorSymbols: symbols.Concat(new[] { "NUGET_Test" })));
+                var compilation = await project.GetCompilationAsync();
+                var recompilation = await compilation.RecompileWithReferencesAsync(frameworkInfo, neededAssemblies);
 
-            var diag = recompilation.GetDiagnostics()
-                .WhereAsArray(x => !x.IsWarningAsError && x.DefaultSeverity == DiagnosticSeverity.Error);
+                var diag = recompilation.GetDiagnostics()
+                    .WhereAsArray(x => !x.IsWarningAsError && x.DefaultSeverity == DiagnosticSeverity.Error);
 
-            // TODO: should errors be ignored exclusivelly through 'NUGET_Test' precompilation symbol?
-            // TODO: maybe some of the errors should be ignored, e.g. those not related to the .Net framework
-            // TODO: will it be possible to convert projects that don't build (e.g. when frmk is switched no new errors can appear)
-            if (diag.Length > 0)
-                return false;
+                // TODO: should errors be ignored exclusivelly through 'NUGET_Test' precompilation symbol?
+                // TODO: maybe some of the errors should be ignored, e.g. those not related to the .Net framework
+                // TODO: will it be possible to convert projects that don't build (e.g. when frmk is switched no new errors can appear)
+                if (diag.Length > 0)
+                    return new FrameworkAnalysisResult(diag);
+            }
 
-            return true;
+            return new FrameworkAnalysisResult();
         }
 
         private static async Task<NugetSymbolsResult> NugetSymbols(FrameworkName frameworkName)
@@ -154,5 +157,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Graphs
         public string[] Types { get; set; }
 
         public Project Project { get; set; }
+
+        public bool Recompile { get; set; }
     }
 }

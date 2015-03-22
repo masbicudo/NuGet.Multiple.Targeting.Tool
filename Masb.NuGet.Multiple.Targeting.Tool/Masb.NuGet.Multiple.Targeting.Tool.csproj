@@ -126,6 +126,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Graphs\FrameworkAnalysisResult.cs" />
     <Compile Include="Storage\AppDataBlobStorageManager.cs" />
     <Compile Include="Helpers\ArgsHelper.cs" />
     <Compile Include="Helpers\ArgType.cs" />

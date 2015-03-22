@@ -7,10 +7,13 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Graphs
 {
     public static class HierarchyGraphExtensions
     {
-        public static async Task<SupportGraph[]> GetSupportGraphAsync(this HierarchyGraph hierarchyGraph, FrameworkRequirements requirements)
+        public static async Task<SupportGraph[]> GetSupportGraphAsync(
+            this HierarchyGraph hierarchyGraph,
+            FrameworkRequirements requirements,
+            bool hideUnsupported)
         {
             var supportedFrameworks = await hierarchyGraph.VisitAsync<SupportGraph[]>(
-                (path, children) => SupportedFrameworkNodesAsync(path, children, requirements));
+                (path, children) => SupportedFrameworkNodesAsync(path, children, requirements, hideUnsupported));
 
             return supportedFrameworks;
         }
@@ -18,15 +21,20 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Graphs
         private static async Task<SupportGraph[]> SupportedFrameworkNodesAsync(
             ImmutableStack<HierarchyGraph> path,
             IEnumerable<SupportGraph[]> children,
-            FrameworkRequirements requirements)
+            FrameworkRequirements requirements,
+            bool hideUnsupported)
         {
             var childrenArray = children.SelectMany(x => x).ToImmutableArray();
 
             var node = path.Peek();
             var isRootGroup = node.FrameworkInfo == null;
-            var isSupported = !isRootGroup && (await requirements.SupportedBy(node.FrameworkInfo));
-            if (isSupported)
-                return new[] { new SupportGraph(node, childrenArray) };
+            if (!isRootGroup)
+            {
+                var supportResult = await requirements.SupportedBy(node.FrameworkInfo);
+                var isSupported = supportResult.IsOk;
+                if (isSupported || !hideUnsupported)
+                    return new[] { new SupportGraph(node, childrenArray, supportResult) };
+            }
 
             return childrenArray.ToArray();
         }
