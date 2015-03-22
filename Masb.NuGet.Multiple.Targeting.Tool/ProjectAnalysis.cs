@@ -57,8 +57,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
             if (diag.Length == 0)
             {
-                var usedTypes = await UsedTypeLocator.FindUsedTypesInCompilation(
-                    compilation,
+                var usedTypes = await compilation.FindUsedTypes(
                     syntaxTree => ConsoleHelper.WriteLine(
                         "Loading file: " + PathHelper.GetRelativePath(solution.FilePath, syntaxTree.FilePath),
                         ConsoleColor.Magenta,
