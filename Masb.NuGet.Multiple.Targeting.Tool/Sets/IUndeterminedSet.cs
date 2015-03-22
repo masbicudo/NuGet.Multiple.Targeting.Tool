@@ -33,6 +33,14 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
         /// </returns>
         bool? Intersects(IUndeterminedSet<T> set);
 
+        /// <summary>
+        /// Returns a value indicating whether this set is empty or not.
+        /// </summary>
+        /// <returns>
+        /// True if the set is empty for sure,
+        ///  false when it contains elements for sure,
+        ///  or null when it is not possible to tell for sure.
+        /// </returns>
         bool? IsEmpty();
     }
 }

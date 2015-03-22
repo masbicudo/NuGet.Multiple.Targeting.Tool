@@ -9,7 +9,13 @@ using Masb.NuGet.Multiple.Targeting.Tool.InfoModel;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
 {
-    public class FrameworkFilter : IUndeterminedSet<FrameworkName>
+    /// <summary>
+    /// Represents a set of <see cref="FrameworkName"/>, by indicating the characteristics of such objects.
+    /// It turns out, that this set is the result of filtering another greater virtual set of frameworks,
+    /// by matching their characteristics.
+    /// </summary>
+    public class FrameworkFilter :
+        IUndeterminedSet<FrameworkName>
     {
         private string fullName;
 
@@ -48,15 +54,58 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
             return str.Split(new[] { sep }).Select(x => x.Trim()).ToArray();
         }
 
+        /// <summary>
+        /// Gets the display name of accepted <see cref="FrameworkName"/>s.
+        /// </summary>
         public string DisplayName { get; private set; }
+
+        /// <summary>
+        /// Gets the family of an accepted <see cref="FrameworkName"/>s.
+        /// </summary>
         public string Family { get; private set; }
+
+        /// <summary>
+        /// Gets the identifier of an accepted <see cref="FrameworkName"/>s.
+        /// </summary>
         public string Identifier { get; private set; }
+
+        /// <summary>
+        /// Gets the minimum version of an accepted <see cref="FrameworkName"/>s.
+        /// </summary>
         public Version MinimumVersion { get; private set; }
+
+        /// <summary>
+        /// Gets the minimum version display name of an accepted <see cref="FrameworkName"/>s.
+        /// </summary>
         public string MinimumVersionDisplayName { get; private set; }
+
+        /// <summary>
+        /// Gets the minimum Visual Studio version that support an accepted <see cref="FrameworkName"/>s.
+        /// This means that for a framework to be in considered in the set, it must be supported by a Visual Studio version
+        /// that is greater or equal to the indicated one.
+        /// </summary>
         public Version MinimumVisualStudioVersion { get; private set; }
+
+        /// <summary>
+        /// Gets the platform characteristics of accepted <see cref="FrameworkName"/>s.
+        /// </summary>
         public PlatformFilter Platform { get; private set; }
+
+        /// <summary>
+        /// Gets the platform architectures of accepted <see cref="FrameworkName"/>s.
+        /// </summary>
         public IEnumerable<string> PlatformArchitectures { get; private set; }
+
+        /// <summary>
+        /// Gets the profile name of accepted <see cref="FrameworkName"/>s.
+        /// </summary>
         public string Profile { get; private set; }
+
+        /// <summary>
+        /// Gets the maximum Visual Studio version that support an accepted <see cref="FrameworkName"/>s.
+        /// This means that for a framework to be in considered in the set, it must be supported by a Visual Studio version
+        /// that is lesser or equal to the indicated one.
+        /// </summary>
         public Version MaximumVisualStudioVersion { get; private set; }
 
         public class PlatformFilter
@@ -72,10 +121,17 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
                 this.MinimumVersion = GetVersion(data.MinimumVersion ?? "");
             }
 
+            /// <summary>
+            /// Gets the platform identifier of accepted <see cref="FrameworkName"/>s.
+            /// </summary>
             public string Identifier { get; private set; }
+
+            /// <summary>
+            /// Gets the platform minimum version of accepted <see cref="FrameworkName"/>s.
+            /// </summary>
             public Version MinimumVersion { get; private set; }
 
-            public string FullName
+            private string FullName
             {
                 get
                 {
@@ -90,13 +146,19 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
                 }
             }
 
+            /// <summary>
+            /// Gets a complete string representation of this platform set.
+            /// </summary>
+            /// <returns>
+            /// The <see cref="string"/> representing the platform set.
+            /// </returns>
             public override string ToString()
             {
                 return this.FullName;
             }
         }
 
-        public string FullName
+        private string FullName
         {
             get
             {
@@ -146,8 +208,6 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
             return Regex.IsMatch(input, @"^" + pattern.Replace(".", @"\.").Replace("*", @".*") + @"$", RegexOptions.IgnoreCase);
         }
 
-        private static readonly string a2z = new string(Enumerable.Range('a', 'z').Select(x => (char)x).ToArray());
-
         private static int CompareMaxVersions(Version a, Version b)
         {
             if (a == null)
@@ -170,6 +230,12 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
             return Comparer<Version>.Default.Compare(a, b);
         }
 
+        /// <summary>
+        /// Gets a complete string representation of this framework set.
+        /// </summary>
+        /// <returns>
+        /// The <see cref="string"/> representing the <see cref="FrameworkName"/> set.
+        /// </returns>
         public override string ToString()
         {
             return this.FullName;
@@ -190,6 +256,14 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
                    && IsStrMatch(frameworkName.Profile, this.Profile);
         }
 
+        /// <summary>
+        /// Determines whether another set intersects with this set.
+        /// </summary>
+        /// <param name="set">The other set to test.</param>
+        /// <returns>
+        /// Returns a optional boolean indicating whether the set intersects or not for sure,
+        /// returning null when it is not possible to tell.
+        /// </returns>
         public bool? Intersects([NotNull] IUndeterminedSet<FrameworkName> set)
         {
             if (set == null)
@@ -209,11 +283,21 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
             return null;
         }
 
+        /// <summary>
+        /// Indicates whether this set is an empty set.
+        /// In the case of a <see cref="FrameworkFilter"/>, it always returns false.
+        /// </summary>
+        /// <returns>Returns false to indicate that this set is not an empty set.</returns>
         public bool? IsEmpty()
         {
             return false;
         }
 
+        /// <summary>
+        /// Determines whether a <see cref="FrameworkNameSet"/> intersects with this set.
+        /// </summary>
+        /// <param name="frmkNameSet">The <see cref="FrameworkNameSet"/> to test.</param>
+        /// <returns>True if this set intersects the other given set.</returns>
         public bool Intersects([NotNull] FrameworkNameSet frmkNameSet)
         {
             if (frmkNameSet == null)
@@ -229,6 +313,11 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
                    && IsStrMatch(frmkName.Profile, filter.Profile);
         }
 
+        /// <summary>
+        /// Determines whether another <see cref="FrameworkFilter"/> intersects with this set.
+        /// </summary>
+        /// <param name="filter">The other <see cref="FrameworkFilter"/> to test.</param>
+        /// <returns>True if this set intersects the other given set.</returns>
         public bool Intersects([NotNull] FrameworkFilter filter)
         {
             if (filter == null)
@@ -255,7 +344,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
         /// <param name="set">The set to test.</param>
         /// <returns>
         /// Returns a optional boolean indicating whether the set is a subset for sure,
-        ///  or not, returning null when it is not possible to know.
+        ///  or not, returning null when it is not possible to tell.
         /// </returns>
         public bool? Contains(IUndeterminedSet<FrameworkName> set)
         {
@@ -273,11 +362,19 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
             return null;
         }
 
+        /// <summary>
+        /// Determines whether another <see cref="FrameworkFilter"/> is a subset.
+        /// </summary>
+        /// <param name="frameworkFilter">The other <see cref="FrameworkFilter"/> to test.</param>
+        /// <returns>True if this set contains the other given set.</returns>
         public bool Contains(FrameworkFilter frameworkFilter)
         {
-            return IsStrMatch(frameworkFilter.Identifier.Replace("*", a2z), this.Identifier)
+            // ReSharper disable once InconsistentNaming
+            const string Letters_a_to_z = "abcdefghijklmnopqrstuvwxyz";
+
+            return IsStrMatch(frameworkFilter.Identifier.Replace("*", Letters_a_to_z), this.Identifier)
                    && IsStrMatch(frameworkFilter.Identifier.Replace("*", ""), this.Identifier)
-                   && IsStrMatch(frameworkFilter.Profile.Replace("*", a2z), this.Profile)
+                   && IsStrMatch(frameworkFilter.Profile.Replace("*", Letters_a_to_z), this.Profile)
                    && IsStrMatch(frameworkFilter.Profile.Replace("*", ""), this.Profile)
                    && CompareMinVersions(frameworkFilter.MinimumVersion, this.MinimumVersion) >= 0
                    && CompareMinVersions(frameworkFilter.MinimumVisualStudioVersion, this.MinimumVisualStudioVersion) >= 0
@@ -314,38 +411,47 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
             return null;
         }
 
+        private static readonly char[] separatorComma = { ',' };
+        private static readonly char[] separatorEqualSign = { '=' };
+
+        /// <summary>
+        /// Tries parsing a <see cref="FrameworkFilter"/> string representation.
+        /// </summary>
+        /// <param name="str">The string to try parsing.</param>
+        /// <param name="value">Output parameter that receives the resulting <see cref="FrameworkFilter"/> if the string is valid, or null otherwise.</param>
+        /// <returns>True if the string represents a valid <see cref="FrameworkFilter"/>. Otherwise false.</returns>
         public static bool TryParse(string str, out FrameworkFilter value)
         {
             if (!string.IsNullOrWhiteSpace(str))
             {
-                var parts = str.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+                var parts = str.Split(separatorComma, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length > 0)
                 {
                     var dic = new Dictionary<string, string>(StringComparer.InvariantCultureIgnoreCase);
                     foreach (var part in parts.Skip(1))
                     {
-                        var eq = part.Split(new char[] { '=' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                        var eq = part.Split(separatorEqualSign, 2, StringSplitOptions.RemoveEmptyEntries);
                         if (eq.Length == 2)
                             dic[eq[0].Trim()] = eq[1].Trim();
                     }
 
                     value = new FrameworkFilter(new FrameworkInfo.SupportedFrameworkItem
+                    {
+                        Identifier = parts[0],
+                        MinimumVersion = ReadVer(dic, "MinimumVersion"),
+                        DisplayName = ReadStr(dic, "DisplayName"),
+                        Family = ReadStr(dic, "Family"),
+                        MaximumVisualStudioVersion = ReadStr(dic, "MaximumVisualStudioVersion"),
+                        MinimumVersionDisplayName = ReadStr(dic, "MinimumVersionDisplayName"),
+                        MinimumVisualStudioVersion = ReadStr(dic, "MinimumVisualStudioVersion"),
+                        Profile = ReadStr(dic, "Profile"),
+                        PlatformArchitectures = ReadList(dic, "PlatformArchitectures"),
+                        Platform = new FrameworkInfo.SupportedFrameworkItem.PlatformItem
                         {
-                            Identifier = parts[0],
-                            MinimumVersion = ReadVer(dic, "MinimumVersion"),
-                            DisplayName = ReadStr(dic, "DisplayName"),
-                            Family = ReadStr(dic, "Family"),
-                            MaximumVisualStudioVersion = ReadStr(dic, "MaximumVisualStudioVersion"),
-                            MinimumVersionDisplayName = ReadStr(dic, "MinimumVersionDisplayName"),
-                            MinimumVisualStudioVersion = ReadStr(dic, "MinimumVisualStudioVersion"),
-                            Profile = ReadStr(dic, "Profile"),
-                            PlatformArchitectures = ReadList(dic, "PlatformArchitectures"),
-                            Platform = new FrameworkInfo.SupportedFrameworkItem.PlatformItem
-                                {
-                                    Identifier = ReadStr(dic, "PlatformIdentifier"),
-                                    MinimumVersion = ReadStr(dic, "PlatformMinimumVersion"),
-                                }
-                        });
+                            Identifier = ReadStr(dic, "PlatformIdentifier"),
+                            MinimumVersion = ReadStr(dic, "PlatformMinimumVersion"),
+                        }
+                    });
 
                     return true;
                 }
