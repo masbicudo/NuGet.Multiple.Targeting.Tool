@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
+using Masb.NuGet.Multiple.Targeting.Tool.Sets;
 using Newtonsoft.Json;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool.Json

@@ -2,6 +2,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Versioning;
 using System.Threading.Tasks;
+using Masb.NuGet.Multiple.Targeting.Tool.InfoModel;
+using Masb.NuGet.Multiple.Targeting.Tool.IoC;
+using Masb.NuGet.Multiple.Targeting.Tool.Sets;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool.Json
 {

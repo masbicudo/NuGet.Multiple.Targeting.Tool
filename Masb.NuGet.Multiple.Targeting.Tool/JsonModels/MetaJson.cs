@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Masb.NuGet.Multiple.Targeting.Tool.Helpers;
 using Newtonsoft.Json;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool.JsonModels

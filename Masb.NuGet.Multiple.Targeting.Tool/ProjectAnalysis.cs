@@ -3,6 +3,9 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
+using Masb.NuGet.Multiple.Targeting.Tool.Graphs;
+using Masb.NuGet.Multiple.Targeting.Tool.Helpers;
+using Masb.NuGet.Multiple.Targeting.Tool.RoslynExtensions;
 using Microsoft.CodeAnalysis;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool
@@ -13,9 +16,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         public Project Project { get; private set; }
 
         [NotNull]
-        public SupportGraph2[] SupportedFrameworks { get; private set; }
+        public SupportGraph[] SupportedFrameworks { get; private set; }
 
-        private ProjectAnalysis([NotNull] Project project, [NotNull] SupportGraph2[] supportedFrameworks)
+        private ProjectAnalysis([NotNull] Project project, [NotNull] SupportGraph[] supportedFrameworks)
         {
             if (project == null)
                 throw new ArgumentNullException("project");
@@ -66,7 +69,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                         Project = project,
 
                         Types = usedTypes
-                            .Select(RoslynExtensions.GetTypeFullName)
+                            .Select(RoslynExtensions.RoslynExtensions.GetTypeFullName)
                             .Where(t => t != "System.Runtime.InteropServices.GuidAttribute")
                             .Where(t => t != "System.Runtime.InteropServices.ComVisibleAttribute")
                             .ToArray(),

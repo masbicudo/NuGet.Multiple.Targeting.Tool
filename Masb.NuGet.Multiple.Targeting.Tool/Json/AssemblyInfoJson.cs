@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Masb.NuGet.Multiple.Targeting.Tool.InfoModel;
 
 namespace Masb.NuGet.Multiple.Targeting.Tool.Json
 {

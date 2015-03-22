@@ -1,3 +1,5 @@
+using Masb.NuGet.Multiple.Targeting.Tool.InfoModel;
+
 namespace Masb.NuGet.Multiple.Targeting.Tool.Json
 {
     public class TypeSymbolInfoJson
