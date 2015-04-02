@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,9 +18,9 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
         public Project Project { get; private set; }
 
         [NotNull]
-        public SupportGraph[] SupportedFrameworks { get; private set; }
+        public ProjectSupportGraph[] SupportedFrameworks { get; private set; }
 
-        private ProjectAnalysis([NotNull] Project project, [NotNull] SupportGraph[] supportedFrameworks)
+        private ProjectAnalysis([NotNull] Project project, [NotNull] ProjectSupportGraph[] supportedFrameworks)
         {
             if (project == null)
                 throw new ArgumentNullException("project");
@@ -30,10 +32,15 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
             this.SupportedFrameworks = supportedFrameworks;
         }
 
-        public static async Task<ProjectAnalysis> AnalyseProjectAsync(Project project, HierarchyGraph hierarchyGraph)
+        public static async Task<ProjectAnalysis> AnalyseProjectAsync(
+            Project project,
+            HierarchyGraph hierarchyGraph,
+            ProjectAnalysis[] dependencies)
         {
             var solution = project.Solution;
-            ConsoleHelper.WriteLine("Processing project: " + PathHelper.GetRelativePath(solution.FilePath, project.FilePath), ConsoleColor.DarkMagenta);
+            ConsoleHelper.WriteLine(
+                "Processing project: " + PathHelper.GetRelativePath(solution.FilePath, project.FilePath),
+                ConsoleColor.DarkMagenta);
 
             var project2 = project;
 
@@ -77,11 +84,52 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
                 // determining what frameworks support this set of types
                 var supportedFrameworks = await hierarchyGraph.GetSupportGraphAsync(frameworkRequirements, false);
 
-                return new ProjectAnalysis(project2, supportedFrameworks);
+                var dependenciesSupportGraph = dependencies
+                    .Select(x => x.SupportedFrameworks)
+                    .Transpose()
+                    .ToArray();
+
+                var projectSupportGraph = ProjectSupportGraphs(supportedFrameworks, dependenciesSupportGraph);
+
+                return new ProjectAnalysis(project2, projectSupportGraph);
             }
 
             return new ProjectAnalysis(project2, null);
         }
 
+        private static ProjectSupportGraph[] ProjectSupportGraphs(
+            IEnumerable<SupportGraph> supportedFrameworks,
+            IEnumerable<ProjectSupportGraph[]> dependenciesSupportGraph)
+        {
+            var projectSupportGraph = supportedFrameworks.Zip(
+                dependenciesSupportGraph,
+                (s, ds) =>
+                {
+                    var dependenciesSupportGraph2 = ds
+                        .Select(x => x.Subsets.Cast<ProjectSupportGraph>())
+                        .Transpose()
+                        .ToArray();
+
+                    var children = ProjectSupportGraphs(
+                        s.Subsets.Cast<SupportGraph>(),
+                        dependenciesSupportGraph2);
+
+                    return new ProjectSupportGraph(s, children, s.Result);
+                })
+                .ToArray();
+
+            return projectSupportGraph;
+        }
+    }
+
+    public class ProjectSupportGraph : SupportGraph
+    {
+        public ProjectSupportGraph(
+            [NotNull] HierarchyGraph shadowGraph,
+            IReadOnlyCollection<ProjectSupportGraph> children,
+            FrameworkAnalysisResult result)
+            : base(shadowGraph, children, result)
+        {
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using JetBrains.Annotations;
@@ -18,7 +19,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Graphs
 
         internal SupportGraph(
             [NotNull] HierarchyGraph shadowGraph,
-            ImmutableArray<SupportGraph> children,
+            IReadOnlyCollection<SupportGraph> children,
             FrameworkAnalysisResult result)
             : base(shadowGraph.FrameworkInfo, children)
         {

@@ -50,5 +50,15 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Helpers
         {
             return enumerable.Select(task => task.ContinueWith(t => func(t.Result)));
         }
+
+        public static IEnumerable<T[]> Transpose<T>(this IEnumerable<IEnumerable<T>> enumerable)
+        {
+            var enumerators = enumerable
+                .Select(x => x.GetEnumerator())
+                .ToArray();
+
+            while (enumerators.All(x => x.MoveNext()))
+                yield return enumerators.Select(x => x.Current).ToArray();
+        }
     }
 }

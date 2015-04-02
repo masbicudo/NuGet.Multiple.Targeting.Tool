@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Masb.NuGet.Multiple.Targeting.Tool.Graphs;
@@ -41,22 +42,28 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
                 var sortedProjectIds = solution
                     .GetProjectDependencyGraph()
-                    .GetTopologicallySortedProjects();
+                    .GetTopologicallySortedProjects()
+                    .ToArray();
 
-                var projAnalyses = new List<ProjectAnalysis>();
+                var projAnalyses = new Dictionary<ProjectId, ProjectAnalysis>();
                 foreach (var projectId in sortedProjectIds)
                 {
                     var project = solution.GetProject(projectId);
-                    var prjAnalysis = await ProjectAnalysis.AnalyseProjectAsync(project, hierarchyGraph);
+                    var dependencies = project.AllProjectReferences
+                        .Select(x => projAnalyses[x.ProjectId])
+                        .ToArray();
+
+                    var prjAnalysis = await ProjectAnalysis.AnalyseProjectAsync(project, hierarchyGraph, dependencies);
                     solution = prjAnalysis.Project.Solution;
-                    projAnalyses.Add(prjAnalysis);
+
+                    projAnalyses.Add(projectId, prjAnalysis);
                 }
 
                 // After analysing all projects, we need to filter supported frameworks
                 // by project dependencies. One project cannot use a framework, if that
                 // framework is not supported by projects depended upon.
 
-                return new SolutionAnalysis(solution, projAnalyses.ToArray());
+                return new SolutionAnalysis(solution, sortedProjectIds.Select(id => projAnalyses[id]).ToArray());
             }
             finally
             {

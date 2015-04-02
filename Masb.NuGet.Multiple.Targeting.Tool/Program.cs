@@ -76,58 +76,63 @@ namespace Masb.NuGet.Multiple.Targeting.Tool
 
         private static async Task LetUserChooseFrameworks(SolutionAnalysis analysis)
         {
-            ConsoleHelper.WriteLine();
-            ConsoleHelper.Write("LIST OF FRAMEWORKS THAT SUPPORT: ", ConsoleColor.Yellow);
-            ConsoleHelper.WriteLine(analysis.Solution.FilePath, ConsoleColor.Blue);
-            ConsoleHelper.WriteLine();
-
             var meta = await MetaJson.Load();
 
             var dicPossibleChoices = new Dictionary<string, HierarchyGraph>(StringComparer.InvariantCultureIgnoreCase);
-            foreach (var node in analysis.ProjectAnalyses.SelectMany(pa => pa.SupportedFrameworks))
-                node.Visit(
-                    path =>
-                    {
-                        var current = (SupportGraph)path.Peek();
-                        var name = current.ToString();
+            foreach (var projectAnalysis in analysis.ProjectAnalyses)
+            {
+                ConsoleHelper.WriteLine();
+                ConsoleHelper.Write("LIST OF FRAMEWORKS THAT SUPPORT: ", ConsoleColor.Yellow);
+                ConsoleHelper.WriteLine(projectAnalysis.Project.FilePath, ConsoleColor.Blue);
+                ConsoleHelper.WriteLine();
 
-                        string newName;
-                        if (meta.aliases.TryGetValue(name, out newName))
-                            name = newName;
-
-                        string acronym = null;
-
-                        PortableProfileMetaJson portable;
-                        if (meta.portableProfiles.TryGetValue(name, out portable))
-                            acronym = new FrameworkName(name).Profile;
-
-                        FrameworkMetaJson frmk;
-                        if (meta.frameworks.TryGetValue(name, out frmk))
-                            acronym = frmk.nugetIds.FirstOrDefault();
-
-                        if (acronym != null && !dicPossibleChoices.ContainsKey(acronym))
-                            dicPossibleChoices.Add(acronym, path.Peek());
-                        else
-                            acronym = null;
-
-                        ConsoleHelper.Write(
-                            name,
-                            !current.Result.IsOk
-                                ? ConsoleColor.Red
-                                : acronym == null
-                                    ? ConsoleColor.DarkGray
-                                    : ConsoleColor.White,
-                            path.Count());
-
-                        if (acronym != null && current.Result.IsOk)
+                foreach (var supportedFramework in projectAnalysis.SupportedFrameworks)
+                {
+                    supportedFramework.Visit(
+                        path =>
                         {
-                            ConsoleHelper.Write(" ( ", ConsoleColor.DarkCyan);
-                            ConsoleHelper.Write(acronym, ConsoleColor.Cyan);
-                            ConsoleHelper.Write(" ) ", ConsoleColor.DarkCyan);
-                        }
+                            var current = (SupportGraph)path.Peek();
+                            var name = current.ToString();
 
-                        ConsoleHelper.WriteLine();
-                    });
+                            string newName;
+                            if (meta.aliases.TryGetValue(name, out newName))
+                                name = newName;
+
+                            string acronym = null;
+
+                            PortableProfileMetaJson portable;
+                            if (meta.portableProfiles.TryGetValue(name, out portable))
+                                acronym = new FrameworkName(name).Profile;
+
+                            FrameworkMetaJson frmk;
+                            if (meta.frameworks.TryGetValue(name, out frmk))
+                                acronym = frmk.nugetIds.FirstOrDefault();
+
+                            if (acronym != null && !dicPossibleChoices.ContainsKey(acronym))
+                                dicPossibleChoices.Add(acronym, path.Peek());
+                            else
+                                acronym = null;
+
+                            ConsoleHelper.Write(
+                                name,
+                                !current.Result.IsOk
+                                    ? ConsoleColor.Red
+                                    : acronym == null
+                                        ? ConsoleColor.DarkGray
+                                        : ConsoleColor.White,
+                                path.Count());
+
+                            if (acronym != null && current.Result.IsOk)
+                            {
+                                ConsoleHelper.Write(" ( ", ConsoleColor.DarkCyan);
+                                ConsoleHelper.Write(acronym, ConsoleColor.Cyan);
+                                ConsoleHelper.Write(" ) ", ConsoleColor.DarkCyan);
+                            }
+
+                            ConsoleHelper.WriteLine();
+                        });
+                }
+            }
 
             ConsoleHelper.WriteLine();
             ConsoleHelper.WriteLine("Select the frameworks to use:", ConsoleColor.Gray);

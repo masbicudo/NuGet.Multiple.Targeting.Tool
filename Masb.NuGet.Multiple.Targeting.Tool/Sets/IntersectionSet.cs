@@ -88,7 +88,7 @@ namespace Masb.NuGet.Multiple.Targeting.Tool.Sets
         /// </summary>
         /// <param name="set">The other set to test.</param>
         /// <returns>
-        /// Returns a optional boolean indicating whether the set intersects or not for sure,
+        /// Returns an optional boolean indicating whether the set intersects or not for sure,
         /// returning null when it is not possible to tell.
         /// </returns>
         public bool? Intersects(IUndeterminedSet<T> set)
